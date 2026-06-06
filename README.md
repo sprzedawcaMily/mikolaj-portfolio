@@ -11,6 +11,23 @@ npm run dev
 
 Produkcja: `npm run build` → folder `dist/`
 
+## Publikacja na GitHub
+
+Repozytorium jest gotowe lokalnie (branch `main`). Jednorazowo zaloguj się i wypchnij:
+
+```powershell
+cd "e:\gitbun\moja prezentacja"
+gh auth login
+gh repo create mikolaj-portfolio --public --source=. --remote=origin --push
+```
+
+Jeśli repo już istnieje na GitHubie:
+
+```powershell
+git remote add origin https://github.com/TWOJ_USER/mikolaj-portfolio.git
+git push -u origin main
+```
+
 ## Zrzuty ekranów aplikacji
 
 Skopiuj swoje screeny do `public/images/` według struktury:
