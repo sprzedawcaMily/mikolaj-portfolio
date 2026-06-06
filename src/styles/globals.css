@@ -1,0 +1,107 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Outfit', sans-serif;
+  color: var(--text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  overflow-x: visible;
+}
+
+html {
+  background-color: var(--bg);
+}
+
+body {
+  background:
+    radial-gradient(circle at 18% 12%, color-mix(in srgb, var(--dot) 16%, transparent), transparent 34%),
+    radial-gradient(circle at 86% 18%, color-mix(in srgb, var(--dot) 12%, transparent), transparent 30%),
+    radial-gradient(circle at 50% 96%, color-mix(in srgb, var(--dot) 12%, transparent), transparent 36%),
+    linear-gradient(
+      180deg,
+      var(--bg) 0%,
+      var(--bg) 38%,
+      color-mix(in srgb, var(--bg) 82%, var(--bg-deep)) 52%,
+      color-mix(in srgb, var(--bg) 64%, var(--bg-deep)) 66%,
+      color-mix(in srgb, var(--bg) 46%, var(--bg-deep)) 80%,
+      var(--bg-deep) 100%
+    );
+  background-repeat: no-repeat;
+  background-color: var(--bg);
+}
+
+#root {
+  min-height: 100vh;
+  position: relative;
+  isolation: isolate;
+}
+
+#mesh-portal-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: visible;
+  contain: none;
+  clip-path: none;
+}
+
+main,
+header,
+footer {
+  position: relative;
+  z-index: 1;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+::selection {
+  background: var(--accent-muted);
+  color: var(--text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -1,0 +1,24 @@
+.frame {
+  position: relative;
+  width: min(820px, 98vw);
+  height: min(860px, 88vh);
+  min-height: 650px;
+  background: transparent;
+  overflow: visible;
+}
+
+.canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: transparent;
+}
+
+@media (max-width: 640px) {
+  .frame {
+    width: min(440px, 100vw);
+    height: 600px;
+    min-height: 540px;
+  }
+}

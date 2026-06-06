@@ -1,0 +1,357 @@
+.wrap {
+  margin-bottom: 16px;
+}
+
+.wrapTransitRank {
+  position: relative;
+  overflow: visible;
+}
+
+.wrapForkFull {
+  position: relative;
+  overflow: visible;
+  z-index: 1;
+  isolation: isolate;
+}
+
+.wrapKamochi {
+  position: relative;
+  overflow: visible;
+  z-index: 1;
+  isolation: isolate;
+}
+
+.meshSlot {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  margin-left: 14px;
+  width: min(500px, 36vw);
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: visible;
+}
+
+.card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 24px;
+  padding: 32px;
+  align-items: start;
+}
+
+.cardNoShots,
+.cardLandscape {
+  display: flex;
+  flex-direction: column;
+}
+
+.cardMain {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.cardNoShots .cardMain,
+.cardLandscape .cardMain {
+  width: 100%;
+}
+
+.cardTransitRank {
+  position: relative;
+  z-index: 1;
+}
+
+.cardForkFull {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+}
+
+.cardKamochi {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.name {
+  margin-top: 8px;
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  margin-top: 6px;
+  font-size: 0.875rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 10px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.link:hover {
+  color: var(--accent);
+}
+
+.accentDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 8px;
+}
+
+.description {
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+
+.infra {
+  padding: 16px 18px;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface-inset) 52%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 40%, transparent);
+}
+
+.infraLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.infraList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.infraList li {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text);
+  padding-left: 14px;
+  position: relative;
+}
+
+.infraList li::before {
+  content: '›';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.shotArea {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px;
+  border-radius: 30px;
+  background: color-mix(in srgb, var(--surface-inset) 48%, transparent);
+  border: 1px solid var(--border-subtle);
+}
+
+.shotArea:not(.shotAreaLandscape) {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+}
+
+.frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  background: color-mix(in srgb, var(--surface) 34%, transparent);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  cursor: zoom-in;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.frame:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-subtle));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.framePortrait {
+  aspect-ratio: 9 / 19.5;
+  width: 100%;
+  max-width: 280px;
+  max-height: 520px;
+  margin: 0 auto;
+  border-radius: 30px;
+}
+
+.frameLandscape {
+  aspect-ratio: 16 / 9;
+  max-width: 100%;
+}
+
+.shot {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+.shotPortrait {
+  object-fit: cover;
+  object-position: top center;
+}
+
+.shotLandscape {
+  object-fit: contain;
+  background: var(--bg-deep);
+}
+
+.zoomHint {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border: 1px solid var(--border-subtle);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.frame:hover .zoomHint,
+.frame:focus-visible .zoomHint {
+  opacity: 1;
+}
+
+.placeholderInner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.placeholderInner code {
+  font-size: 0.65rem;
+  word-break: break-all;
+  opacity: 0.7;
+}
+
+.thumbs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  opacity: 0.55;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  background: color-mix(in srgb, var(--surface-inset) 64%, transparent);
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.thumbLandscape {
+  width: 80px;
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumb:hover {
+  transform: scale(0.99);
+  opacity: 0.85;
+}
+
+.thumbActive {
+  opacity: 1;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.features li {
+  font-size: 0.875rem;
+  color: var(--text);
+  padding-left: 16px;
+  position: relative;
+}
+
+.features li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dot);
+  box-shadow: 0 0 8px var(--dot-glow);
+}
+
+.stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.shotAreaLandscape {
+  width: 100%;
+}

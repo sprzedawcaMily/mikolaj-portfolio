@@ -1,0 +1,49 @@
+.bar {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  padding: 0 4px;
+}
+
+.track {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: none;
+  background: linear-gradient(
+    90deg,
+    #ff3b30 0%,
+    #ff9500 14%,
+    #ffcc00 28%,
+    #34c759 42%,
+    #00c7be 57%,
+    #007aff 71%,
+    #af52de 85%,
+    #ff2d55 100%
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.thumb {
+  position: absolute;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  margin-left: -11px;
+  margin-top: -11px;
+  border-radius: 999px;
+  border: 3px solid #ffffff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.track:active .thumb {
+  transition: none;
+}
+
+@media (min-width: 900px) {
+  .track {
+    height: 16px;
+  }
+}

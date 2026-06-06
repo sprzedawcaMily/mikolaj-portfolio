@@ -1,0 +1,53 @@
+.section {
+  padding: 80px 24px 120px;
+  position: relative;
+  z-index: 1;
+}
+
+.inner {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 48px;
+  justify-content: center;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.value:hover {
+  color: var(--accent);
+}
+
+.actions {
+  margin-top: 8px;
+}
+
+@media (min-width: 720px) {
+  .section {
+    padding: 100px 32px 140px;
+  }
+}

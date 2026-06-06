@@ -1,0 +1,20 @@
+.header {
+  margin-bottom: 24px;
+}
+
+.title {
+  margin-top: 8px;
+  font-size: clamp(1.75rem, 5vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin-top: 12px;
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+  max-width: 52ch;
+  line-height: 1.65;
+}

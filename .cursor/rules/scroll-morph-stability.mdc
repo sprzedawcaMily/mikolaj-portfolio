@@ -1,0 +1,52 @@
+---
+description: Invariants scroll-morph mesh (twarz→strzałka→projekty) — nie psuj bez powodu
+globs: src/hooks/usePortraitScrollMorph.ts,src/components/animation/AnimatedNeonPortrait.tsx
+alwaysApply: false
+---
+
+# Scroll morph — stabilność animacji
+
+## Zasada główna
+
+**Scroll tylko uruchamia animację. Progress idzie w czasie (lerp + lock), nie w sync ze scroll position** (wyjątek: pin layout nadal od scrolla sekcji palety).
+
+## Łańcuch stage
+
+`hero → palette → transit → fork → spray`
+
+## Locki animacji (nie przerywać mid-flight)
+
+| Lock | Plik | Zachowanie |
+|------|------|------------|
+| `paletteAnimLockRef` | morph / demorph | Twarz↔strzałka do końca po triggerze scrolla |
+| `sprayAnimLockRef` | morph / demorph | Widelec↔sprej do końca |
+| `sprayScrollUpLatchRef` | kierunek | Demorph spreju tylko przy scrollu w górę |
+
+**Nigdy** nie nadpisuj locka `morph` przez scroll heurystyki w tej samej klatce.
+
+## Reset / hero
+
+- `pageTopZone` + `applyHeroFrame` — **tylko gdy wszystkie animy idle** (twarz, transit, fork, spray).
+- `canHardReset` — **bez** `atPageTop` OR; wymaga `animProgress <= MORPH_IDLE`.
+- Przejście na `hero` z `animProgress > 0` → ustaw `paletteAnimLockRef = 'demorph'`, nie resetuj `animProgress`.
+
+## Demorph sprej → widelec
+
+- Wymaga scrollu **w górę** (`sprayScrollIntentUp`), nie samej pozycji Kamochi.
+- Albo widoczna karta Forkfull, albo Kamochi poza strefą focusu w dół.
+- **Nie** demorph gdy obie karty widoczne przy scrollu w dół.
+
+## Render palety
+
+- `paletteOnlyMorph` / face-arrow: wyłącz `busRender`, `forkRender`, `sprayRender`.
+- `setMorphTarget`: hero **i** palette używają `animProgress` (demorph strzałka→twarz).
+
+## Canvas (`AnimatedNeonPortrait`)
+
+- `externalMorphRef` — podążaj z lerpem (`follow`), nie przypisuj na sztywno (batch React).
+- Nie usuwaj `paintFaceToSprayMorph` / map fork→spray bez weryfikacji węzłów SVG.
+
+## Szybki scroll
+
+- `scrollJump` — snap project anims do stage, **nie** `animProgress = scrollT` na palecie.
+- Przy jump na hero z aktywną strzałką → demorph, nie teleport.

@@ -1,0 +1,42 @@
+---
+description: Kosmiczny MD3 — płaskie powierzchnie, bez gradientów na komponentach
+globs: src/**/*.{css,tsx,module.css}
+alwaysApply: true
+---
+
+# Kosmiczny MD3 — zasady UI
+
+## Powierzchnie komponentów
+
+- Karty, panele i sekcje contentu mają **płaskie tło** z tokenów (`--surface`, `--surface-inset`), bez gradientów.
+- Nie dodawaj `linear-gradient`, `radial-gradient` ani warstw `::before` / `::after` z gradientem na kartach i wrapperach komponentów.
+- Kosmiczny klimat pochodzi z **tła strony**, gwiazd i animacji — nie z gradientów na UI.
+
+```css
+/* ❌ Źle — gradient na karcie */
+.card::before {
+  background: radial-gradient(circle at 16% 0%, rgba(167, 139, 250, 0.12), transparent 36%);
+}
+
+/* ✅ Dobrze — płaskie szkło */
+.card {
+  background: color-mix(in srgb, var(--surface) 56%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 35%, transparent);
+}
+```
+
+## Wyjątki
+
+- Tło globalne `body` / `html` (delikatny gradient strony).
+- Małe elementy dekoracyjne: pasek skilla, glow portretu, canvas animacji — nie pełne tła komponentów.
+
+## Animacje (MD3)
+
+- Wejście sekcji: spokojny fade + lekki `translateY` + subtelny blur, easing MD3 Emphasized Decelerate `cubic-bezier(0.05, 0.7, 0.1, 1)`.
+- Bez agresywnych burstów, rozszerzania i ciężkiego canvasu na każdej karcie.
+- Reveal odtwarza się **raz** przy pierwszym wejściu w viewport.
+
+## Spójność
+
+- Zachowaj obramowanie i `backdrop-filter` kart — to „neon glass”, nie gradient.
+- Nowe komponenty w `emds/` i `portfolio/` muszą trzymać ten sam styl powierzchni.

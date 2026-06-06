@@ -1,0 +1,95 @@
+import { motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
+import { AnimatedNeonPortrait } from '@/components/animation/AnimatedNeonPortrait';
+import { Badge } from '@/components/emds';
+import { profile } from '@/data/profile';
+import { usePortraitScrollMorph, MESH_PORTAL_ID, HERO_MESH_ANCHOR_ID } from '@/hooks/usePortraitScrollMorph';
+import styles from './Hero.module.css';
+
+const skillStats = [
+  { label: 'Frontend', value: 97 },
+  { label: 'Backend', value: 94 },
+  { label: 'Mobile', value: 96 },
+  { label: 'Big Data', value: 90 },
+];
+
+export function Hero() {
+  const { morphTarget, busMorphTarget, busRenderActive, forkMorphTarget, forkRenderActive, sprayMorphTarget, sprayRenderActive, aimPoint, pinStyle, isAtPalette } =
+    usePortraitScrollMorph();
+
+  const meshPortalRoot =
+    typeof document !== 'undefined' ? document.getElementById(MESH_PORTAL_ID) : null;
+
+  const meshLayer =
+    pinStyle &&
+    meshPortalRoot &&
+    createPortal(
+      <div
+        className={`${styles.meshBackground} ${isAtPalette ? styles.meshArrowMode : ''}`}
+        style={pinStyle}
+      >
+        <AnimatedNeonPortrait
+          morphProgress={morphTarget}
+          busMorphProgress={busMorphTarget}
+          busRenderActive={busRenderActive}
+          forkMorphProgress={forkMorphTarget}
+          forkRenderActive={forkRenderActive}
+          sprayMorphProgress={sprayMorphTarget}
+          sprayRenderActive={sprayRenderActive}
+          aimPoint={aimPoint}
+        />
+      </div>,
+      meshPortalRoot,
+    );
+
+  return (
+    <section className={styles.hero} id="top">
+      <div className={styles.heroGrid}>
+        <motion.div
+          className={styles.copy}
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <Badge tone="accent">Full-Stack · TypeScript · Mobile</Badge>
+          <p className={styles.greeting}>Player select</p>
+          <h1 className={styles.name}>{profile.name}</h1>
+          <p className={styles.characterClass}>Class: {profile.title} · Big Data</p>
+          <p className={styles.summary}>
+            Wybierasz Mikołaja: inżyniera full-stack, który projektuje skalowalne
+            architektury w TypeScript, optymalizuje pipeline’y danych i dowozi produkty
+            od backendu po aplikacje mobilne.
+          </p>
+
+          <div className={styles.skillPanel} aria-label="Poziom umiejętności postaci">
+            <div className={styles.skillHeader}>
+              <span>Skill stats</span>
+              <strong>High level build</strong>
+            </div>
+            {skillStats.map((stat) => (
+              <div className={styles.skillRow} key={stat.label}>
+                <span className={styles.skillLabel}>{stat.label}</span>
+                <div className={styles.skillTrack} aria-hidden="true">
+                  <span className={styles.skillFill} style={{ width: `${stat.value}%` }} />
+                </div>
+                <strong className={styles.skillValue}>{stat.value}</strong>
+              </div>
+            ))}
+          </div>
+
+          <div className={styles.actions}>
+            <a href="#projekty" className={styles.ctaPrimary}>
+              Zobacz projekty
+            </a>
+            <a href="#kontakt" className={styles.ctaSecondary}>
+              Zatwierdź
+            </a>
+          </div>
+        </motion.div>
+
+        <div id={HERO_MESH_ANCHOR_ID} className={styles.meshSlot} aria-hidden="true" />
+      </div>
+      {meshLayer}
+    </section>
+  );
+}

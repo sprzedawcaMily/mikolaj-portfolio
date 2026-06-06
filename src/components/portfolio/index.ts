@@ -1,0 +1,8 @@
+export { AboutSection } from './AboutSection';
+export { ContactSection } from './ContactSection';
+export { ExperienceSection } from './ExperienceSection';
+export { Hero } from './Hero';
+export { HuePickerSection } from './HuePickerSection';
+export { ProjectsSection } from './ProjectsSection';
+export { SiteFooter } from './SiteFooter';
+export { SkillsSection } from './SkillsSection';
