@@ -1,13 +1,24 @@
 import type { MeshZone } from '@/hooks/meshScrollEngine';
 import {
   computeAllZonePins,
+  CONTACT_CTA_ANCHOR_ID,
+  CONTACT_MESH_ANCHOR_ID,
+  isEyeAnchorInView,
   pinForZonePins,
   refreshMeshZoneAfterViewportChange,
   resolveActiveMeshZone,
+  ZONE_ORDER,
   type MeshPinState,
 } from '@/hooks/meshScrollEngine';
-import { buildDotAtlas, clearPaletteLayoutCache, zoneLayout, type MeshReflector } from '@/components/animation/mesh/meshDotAtlas';
-import { scaleAim } from '@/components/animation/mesh/morph/atlasCache';
+import type { PaletteTone } from '@/components/animation/mesh/parsePaletteMesh';
+import {
+  buildDotAtlas,
+  clearPaletteLayoutCache,
+  zoneLayout,
+  type DotAtlas,
+  type MeshReflector,
+} from '@/components/animation/mesh/meshDotAtlas';
+import { getPaletteToneColors, type PaletteToneColors } from '@/theme/paletteEngine';
 import { projectFaceNode } from '@/components/animation/mesh/faceMesh';
 import type { MeshBundle, MorphEdge, NormPt } from '@/components/animation/mesh/morph/types';
 import { easeOutEmphasized } from '@/components/animation/mesh/morph/morphPath';
@@ -23,6 +34,14 @@ import {
   stepEyeIrisReveal,
 } from '@/components/animation/eyeBlink';
 import { publishMeshMotionState } from '@/hooks/meshMotionState';
+import {
+  isPerfMonitorEnabled,
+  logPerfEvent,
+  publishMeshPerfStats,
+  publishTickPhases,
+  recordAtlasBuild,
+  setTickSpikeContext,
+} from '@/hooks/meshPerfStats';
 
 export type ViewportGoal = { x: number; y: number };
 
@@ -53,6 +72,8 @@ export type FlyingDot = {
   streakUx: number;
   streakUy: number;
   gatherPath: boolean;
+  /** Prosty lot liniowy — budowa twarzy bez smugi / blobu. */
+  simpleFlight: boolean;
   alpha: number;
   tgtAlpha: number;
   isHair: boolean;
@@ -70,6 +91,8 @@ export type FlyingDot = {
   reflectorPhase: number;
   reflectorR: number;
   reflectorHostId: number | null;
+  /** Ton kropki w strefie palette (kolory z motywu). */
+  paletteTone: PaletteTone | null;
 };
 
 export type ScrollBuildDir = 'up' | 'down';
@@ -100,9 +123,15 @@ export type FlyingPool = {
   hairWireRevealMaxGrow: Map<string, number> | null;
   hairWireRevealMaxAlpha: Map<string, number> | null;
   morphFlying: boolean;
-  /** Przesunięcie oddechu strzałki w stronę / od kropki pickera (px, doc). */
+  /** Przesunięcie oddechu palety w stronę / od kropki pickera (px, doc). */
   paletteBreathOx: number;
   paletteBreathOy: number;
+  /** hostId → ton koloru kropki palety. */
+  paletteTones: Map<number, PaletteTone>;
+  /** p:nodeId → ton kropki SVG palety. */
+  paletteSplatTones: Map<string, PaletteTone>;
+  /** hostId → pozycja plamy farby w układzie stage (px). */
+  paletteToneAnchors: Map<number, { x: number; y: number }>;
   /** Śledzenie wskaźnika — tęczówka / źrenica oka (px, doc). */
   eyeTrackOx: number;
   eyeTrackOy: number;
@@ -115,6 +144,43 @@ export type FlyingPool = {
   eyeFrameScaleY: number;
   eyeFrameReady: boolean;
   eyeRevealArmed: boolean;
+  /** Oko — czeka aż slot wejdzie w viewport zanim ruszy morph. */
+  eyeMorphHold: MeshZone | null;
+  /** Oko zbudowane w tej sesji — blokuje natychmiastowy buildT=1. */
+  eyeMorphBuilt: boolean;
+  /** Aktywne chmury farby ze spreju (mini-mesh na canvasie). */
+  sprayBursts: SprayBurst[];
+  sprayNextBurstAt: number;
+  sprayBurstToneIdx: number;
+};
+
+type SprayNode = {
+  along: number;
+  across: number;
+  delay: number;
+};
+
+type SprayEdge = { a: number; b: number };
+
+type SprayBurstBasis = {
+  ox: number;
+  oy: number;
+  dirX: number;
+  dirY: number;
+  perpX: number;
+  perpY: number;
+};
+
+type SprayBurst = {
+  startTime: number;
+  wireColor: string;
+  dirX: number;
+  dirY: number;
+  perpX: number;
+  perpY: number;
+  nodes: SprayNode[];
+  edges: SprayEdge[];
+  dotR: number;
 };
 
 export type FacePointer = {
@@ -139,9 +205,12 @@ const DOT_ALPHA = 0.92;
 const DOT_GRAY = '#d9d9d9';
 const ALPHA_SPEED = 7.5;
 const SCALE_SPEED = 5;
-const PALETTE_AIM_FOLLOW_SPEED = 2400;
 /** Morph — wolno, wspólnie, majestatyczne lądowanie. */
 const FLIGHT_DURATION_S = 2.28;
+/** Budowa twarzy — krótszy, równoległy lot bez efektów smugi. */
+const HERO_FLIGHT_DURATION_S = 1.35;
+/** Budowa powieki — widoczny lot równoległy. */
+const EYE_FLIGHT_DURATION_S = 2.15;
 const CRUMBLE_FLIGHT_DURATION_S = 2.35;
 const MORPH_DEPART_JITTER_S = 0.028;
 /** Rozpiętość startu kropek w smudze (s) — tylne wyskakują później. */
@@ -159,6 +228,28 @@ const HAIR_FLIGHT_START = 0.06;
 const HAIR_GATHER_TINT_START = 0.46;
 /** Fala kresek włosów — od góry w dół (ms). */
 const HAIR_WIRE_REVEAL_MS = 1350;
+/** Sprej Kamochi — chmura z czerwonej kropki (dziubek): kropki + kreski jak mesh. */
+const SPRAY_SVG_W = 561;
+const SPRAY_SVG_H = 1712;
+/** Czerwona kropka na dyszce w sprej.svg (fallback gdy brak reflektora). */
+const SPRAY_NOZZLE_NORM: NormPt = { nx: 222.5 / SPRAY_SVG_W, ny: 45.5 / SPRAY_SVG_H };
+/** Kierunek strzału — w lewo od dyszki (SVG). */
+const SPRAY_AIM_NORM: NormPt = { nx: 38 / SPRAY_SVG_W, ny: 50 / SPRAY_SVG_H };
+const SPRAY_AIM_LEFT_NORM_OFFSET = 0.3;
+const SPRAY_BURST_MS = 4400;
+const SPRAY_BURST_EXPAND = 2.7;
+/** Rozszerzanie chmury: wąsko przy dyszce → coraz szerszy stożek w trakcie lotu. */
+const SPRAY_BURST_LATERAL_START = 0.18;
+const SPRAY_BURST_LATERAL_END = 1.38;
+/** >1 — łagodne puchnięcie pod koniec (bez gwałtownego skoku). */
+const SPRAY_BURST_LATERAL_TIME_POWER = 1.18;
+const SPRAY_BURST_FADE_START = 0.76;
+const SPRAY_BURST_MIN_GAP_MS = 8200;
+const SPRAY_BURST_GAP_SPAN_MS = 4600;
+const SPRAY_BURST_FIRST_DELAY_MS = 3200;
+/** Wolny, majestatyczny dojazd rozszerzania (wyższa potęga = spokojniej). */
+const SPRAY_BURST_MAJESTIC_POWER = 3.15;
+const SPRAY_BURST_TONES: PaletteTone[] = ['pink', 'green', 'yellow', 'blue', 'accent'];
 /** Ile czasu fali idzie na rozłożenie po wysokości (0–1). */
 const HAIR_WIRE_REVEAL_STAGGER = 0.62;
 const FLIGHT_ARC_PX = 14;
@@ -196,6 +287,8 @@ const SETTLED_DRIFT_MUL = 1.28;
 const STAR_WIRE_TWINKLE = 0.09;
 const STAR_OPACITY_MIN = 0.84;
 const STAR_SCALE_PULSE = 0.038;
+const RING_WIRE_GLINT = 0.18;
+const RING_SCALE_GLINT = 0.065;
 /** Odstęp między mrugnięciami twarzy (ms). */
 const HERO_BLINK_FIRST_DELAY_MS = 5200;
 const HERO_BLINK_MIN_GAP_MS = 9000;
@@ -211,6 +304,7 @@ function starSeed(dot: FlyingDot) {
 function constellationPositionGate(dot: FlyingDot) {
   if (dot.alpha < 0.05 || dot.tgtAlpha < 0.05) return 0;
   if (dot.departLeft > 0.01) return 0;
+  if (dotInFlight(dot)) return 0;
   return 1;
 }
 
@@ -283,9 +377,6 @@ const WIRE_ABS_MAX_CARD_PX = 96 * WIRE_CATCH_MUL;
 const WIRE_DRAW_ABS_MAX_PX = 168 * WIRE_CATCH_MUL;
 const SOFT_TGT_SHIFT_PX = 24;
 /** Powolny oddech — cała strzałka jedzie w stronę / od kropki (bez skalowania). */
-const PALETTE_BREATH_CYCLE_MS = 26_000;
-const PALETTE_BREATH_TRAVEL_PX = 16;
-const PALETTE_BREATH_ORIGIN_Y_RATIO = 0.24;
 
 /** Strefy poza hero — luźniejsze limity kresek i mniej restartów lotu. */
 const MORPH_SHAPE_ZONES = new Set<MeshZone>([
@@ -297,6 +388,7 @@ const MORPH_SHAPE_ZONES = new Set<MeshZone>([
   'ring',
   'careerEye',
   'skillsEye',
+  'contactArrow',
 ]);
 
 const EYE_SVG_W = 1408;
@@ -314,18 +406,70 @@ function isMorphShapeZone(zone: MeshZone) {
   return MORPH_SHAPE_ZONES.has(zone);
 }
 
+function isStudioPaletyInView() {
+  const section = document.getElementById('studio-palety');
+  if (!section) return false;
+  const rect = section.getBoundingClientRect();
+  const vh = window.innerHeight;
+  return rect.bottom > 40 && rect.top < vh - 40;
+}
+
 type NormGoals = {
   goals: Map<string, NormPt>;
   layoutScale: number;
   edges: MorphEdge[];
   mergeMembers: Map<number, number>;
   reflectors: MeshReflector[];
+  paletteTones: Map<number, PaletteTone>;
+  paletteSplatTones: Map<string, PaletteTone>;
+  paletteToneAnchors: Map<number, { x: number; y: number }>;
 };
 const normGoalsCache = new Map<string, NormGoals>();
+const dotAtlasBySize = new Map<string, DotAtlas>();
+let lastSyncLayoutMs = 0;
+let lastSyncEnsureDotsMs = 0;
+let atlasBuildThisTick = 0;
 
 function clearNormGoalsCache() {
   normGoalsCache.clear();
   clearPaletteLayoutCache();
+}
+
+function ensureDotAtlas(bundle: MeshBundle, w: number, h: number): DotAtlas {
+  const key = `${Math.round(w)}x${Math.round(h)}`;
+  let atlas = dotAtlasBySize.get(key);
+  if (atlas) return atlas;
+
+  const t0 = performance.now();
+  atlas = buildDotAtlas(bundle.faceMesh, bundle.zoneMeshes, w, h, null);
+  atlasBuildThisTick = performance.now() - t0;
+  recordAtlasBuild(key, atlasBuildThisTick);
+  dotAtlasBySize.set(key, atlas);
+  if (dotAtlasBySize.size > 14) dotAtlasBySize.clear();
+  return atlas;
+}
+
+/** Buduje layouty wszystkich stref zanim user scrolluje — unika freeze przy morphu. */
+export function prewarmMeshLayouts(bundle: MeshBundle): boolean {
+  const pins = computeAllZonePins();
+  if (!pins) return false;
+
+  const t0 = performance.now();
+  const sizes = new Set<string>();
+  for (const zone of ZONE_ORDER) {
+    const pin = pinForZonePins(pins, zone);
+    const sizeKey = `${Math.round(pin.stageW)}x${Math.round(pin.stageH)}`;
+    if (!sizes.has(sizeKey)) {
+      sizes.add(sizeKey);
+      ensureDotAtlas(bundle, pin.stageW, pin.stageH);
+    }
+    normGoalsForZone(zone, bundle, pin, pins.paletteAim, pins.paletteAim);
+  }
+
+  const ms = performance.now() - t0;
+  publishMeshPerfStats({ prewarmDone: true });
+  logPerfEvent('prewarm layoutów zakończony', { ms: +ms.toFixed(1), zones: ZONE_ORDER.length });
+  return true;
 }
 
 function viewportLayoutKey() {
@@ -363,50 +507,21 @@ function normToDocument(norm: NormPt, pin: MeshPinState): ViewportGoal {
 }
 
 function normCacheKey(zone: MeshZone, pin: MeshPinState, aimKey: string) {
-  return `${zone}:${Math.round(pin.stageW)}:${Math.round(pin.stageH)}:${aimKey}`;
+  return `${zone}:${Math.round(pin.stageW)}:${Math.round(pin.stageH)}:${Math.round(pin.rotateDeg)}:${aimKey}`;
 }
 
 function normGoalsForZone(
   zone: MeshZone,
   bundle: MeshBundle,
   pin: MeshPinState,
-  paletteAim: { x: number; y: number; centerX: number; stageW: number; stageH: number } | null,
-  pinsPaletteAim: { x: number; y: number; centerX: number; stageW: number; stageH: number } | null,
+  _paletteAim: { x: number; y: number; centerX: number; stageW: number; stageH: number } | null,
+  _pinsPaletteAim: { x: number; y: number; centerX: number; stageW: number; stageH: number } | null,
 ): NormGoals | null {
-  const aim = zone === 'palette' && pinsPaletteAim ? pinsPaletteAim : paletteAim;
-  const skipCache = zone === 'palette';
-  const aimKey =
-    zone === 'palette' && aim
-      ? `${Math.round(aim.x * 2)}:${Math.round(aim.y * 2)}`
-      : 'none';
-  const cacheKey = normCacheKey(zone, pin, aimKey);
-  if (!skipCache) {
-    const cached = normGoalsCache.get(cacheKey);
-    if (cached) return cached;
-  }
+  const cacheKey = normCacheKey(zone, pin, 'static');
+  const cached = normGoalsCache.get(cacheKey);
+  if (cached) return cached;
 
-  const scaledAim =
-    zone === 'palette' && aim
-      ? scaleAim(
-          {
-            x: aim.x,
-            y: aim.y,
-            centerX: aim.centerX,
-            stageW: aim.stageW,
-            stageH: aim.stageH,
-          },
-          pin.stageW,
-          pin.stageH,
-        )
-      : null;
-
-  const atlas = buildDotAtlas(
-    bundle.faceMesh,
-    bundle.zoneMeshes,
-    pin.stageW,
-    pin.stageH,
-    scaledAim,
-  );
+  const atlas = ensureDotAtlas(bundle, pin.stageW, pin.stageH);
   const snap = snapshotFromZoneLayout(zone, atlas, bundle.faceMesh, pin.stageW, pin.stageH);
   if (!snap) return null;
 
@@ -431,17 +546,19 @@ function normGoalsForZone(
           group: 'reflector' as const,
         }))),
   ];
+
   const result = {
     goals,
     layoutScale: snap.layoutScale,
     edges,
     mergeMembers: layout?.mergeMembers ?? new Map(),
     reflectors: layout?.reflectors ?? [],
+    paletteTones: zone === 'palette' ? layout?.paletteTones ?? new Map() : new Map(),
+    paletteSplatTones: new Map<string, PaletteTone>(),
+    paletteToneAnchors: zone === 'palette' ? layout?.paletteToneAnchors ?? new Map() : new Map(),
   };
-  if (!skipCache) {
-    normGoalsCache.set(cacheKey, result);
-    if (normGoalsCache.size > 20) normGoalsCache.clear();
-  }
+  normGoalsCache.set(cacheKey, result);
+  if (normGoalsCache.size > 20) normGoalsCache.clear();
   return result;
 }
 
@@ -451,6 +568,9 @@ type ZoneViewportLayout = {
   mergeMembers: Map<number, number>;
   edges: MorphEdge[];
   reflectors: MeshReflector[];
+  paletteTones: Map<number, PaletteTone>;
+  paletteSplatTones: Map<string, PaletteTone>;
+  paletteToneAnchors: Map<number, { x: number; y: number }>;
 };
 
 function viewportGoalsForZone(
@@ -474,6 +594,9 @@ function viewportGoalsForZone(
     mergeMembers: norms.mergeMembers,
     edges: norms.edges,
     reflectors: norms.reflectors,
+    paletteTones: norms.paletteTones,
+    paletteSplatTones: norms.paletteSplatTones,
+    paletteToneAnchors: norms.paletteToneAnchors,
   };
 }
 
@@ -536,15 +659,15 @@ function findDuplicateSpawn(
   mergeMembers: Map<number, number>,
   hostOrder: number[],
 ): ViewportGoal | null {
-  if (!newId.startsWith('h:')) return null;
-  const hostId = Number(newId.slice(2));
-  if (!Number.isFinite(hostId)) return null;
-
   const pick = (id: string) => {
     const dot = pool.dots.get(id);
     if (!dot || dot.alpha < 0.04) return null;
     return { x: dot.x, y: dot.y };
   };
+
+  if (!newId.startsWith('h:')) return null;
+  const hostId = Number(newId.slice(2));
+  if (!Number.isFinite(hostId)) return null;
 
   const leaderId = mergeMembers.get(hostId);
   if (leaderId != null) {
@@ -577,6 +700,7 @@ function pinLayoutKey(pins: NonNullable<ReturnType<typeof computeAllZonePins>>) 
     'ring',
     'careerEye',
     'skillsEye',
+    'contactArrow',
   ] as MeshZone[]) {
     const pin = pinForZonePins(pins, zone);
     parts.push(
@@ -591,12 +715,10 @@ function activeZoneLayoutKey(
   pins: NonNullable<ReturnType<typeof computeAllZonePins>>,
 ) {
   const pin = pinForZonePins(pins, zone);
-  let key = `${Math.round(pin.docLeft)}:${Math.round(pin.docTop)}:${Math.round(pin.stageW)}:${Math.round(pin.stageH)}:${Math.round(pin.rotateDeg)}`;
-  if (zone === 'palette' && pins.paletteAim) {
-    const a = pins.paletteAim;
-    key += `:${Math.round(a.x * 4)}:${Math.round(a.y * 4)}`;
+  if (zone === 'contactArrow') {
+    return `${Math.round(pin.docLeft / 8) * 8}:${Math.round(pin.docTop / 8) * 8}:${Math.round(pin.stageW)}:${Math.round(pin.stageH)}`;
   }
-  return key;
+  return `${Math.round(pin.docLeft)}:${Math.round(pin.docTop)}:${Math.round(pin.stageW)}:${Math.round(pin.stageH)}:${Math.round(pin.rotateDeg)}`;
 }
 
 /** Resize / zoom / picker — snap do pinu; w locie tylko cel (chyba że zmienił się rozmiar stage). */
@@ -607,7 +729,7 @@ function syncRigidLayoutFollow(
   paletteAim: { x: number; y: number; centerX: number; stageW: number; stageH: number } | null,
   pins: NonNullable<ReturnType<typeof computeAllZonePins>>,
   sizeChanged: boolean,
-  dt: number,
+  _dt: number,
 ) {
   const layout = viewportGoalsForZone(zone, bundle, paletteAim, pins);
   if (!layout) return;
@@ -615,12 +737,19 @@ function syncRigidLayoutFollow(
   pool.wireEdges = layout.edges;
   pool.tgtLayoutScale = layout.layoutScale;
   pool.layoutScale = layout.layoutScale;
-
-  const smoothAim = zone === 'palette' && !sizeChanged;
+  if (zone === 'palette') {
+    pool.paletteTones = layout.paletteTones;
+    pool.paletteSplatTones = layout.paletteSplatTones;
+    pool.paletteToneAnchors = layout.paletteToneAnchors;
+  }
 
   for (const [id, goal] of layout.goals) {
     const dot = pool.dots.get(id);
     if (!dot || dot.tgtAlpha <= 0.03) continue;
+
+    if (zone === 'palette' && dot.hostId != null) {
+      dot.paletteTone = layout.paletteTones.get(dot.hostId) ?? 'wire';
+    }
 
     dot.tgtX = goal.x;
     dot.tgtY = goal.y;
@@ -632,13 +761,8 @@ function syncRigidLayoutFollow(
       continue;
     }
 
-    if (smoothAim) {
-      dot.x = stepScalar(dot.x, goal.x, PALETTE_AIM_FOLLOW_SPEED, dt);
-      dot.y = stepScalar(dot.y, goal.y, PALETTE_AIM_FOLLOW_SPEED, dt);
-    } else {
-      dot.x = goal.x;
-      dot.y = goal.y;
-    }
+    dot.x = goal.x;
+    dot.y = goal.y;
     dot.srcX = dot.x;
     dot.srcY = dot.y;
     dot.flightU = 1;
@@ -796,6 +920,7 @@ function updateMorphBloom(pool: FlyingPool, now: number) {
 }
 
 function dotFlightScale(dot: FlyingDot) {
+  if (dot.simpleFlight) return 1;
   const u = Math.max(0, Math.min(1, dot.flightU));
   if (!dot.gatherPath) {
     return 1 - Math.sin(u * Math.PI) * FLIGHT_SHRINK;
@@ -833,17 +958,14 @@ function idleDotFlight(dot: FlyingDot) {
   dot.departLeft = 0;
   dot.alphaHoldLeft = 0;
   dot.gatherPath = false;
+  dot.simpleFlight = false;
 }
 
 function morphSettled(pool: FlyingPool) {
   return !pool.morphFlying && !anyDotInFlight(pool);
 }
 
-function computeMorphBuildT(pool: FlyingPool, zone: MeshZone): number {
-  if (zone === 'hero') return morphSettled(pool) ? 1 : 0;
-  if (!isMorphShapeZone(zone)) return 1;
-  if (!pool.morphFlying && morphSettled(pool)) return 1;
-
+function morphBuildProgress(pool: FlyingPool) {
   let sum = 0;
   let count = 0;
   for (const dot of pool.dots.values()) {
@@ -856,16 +978,27 @@ function computeMorphBuildT(pool: FlyingPool, zone: MeshZone): number {
   return count > 0 ? sum / count : 0;
 }
 
+function computeMorphBuildT(pool: FlyingPool, zone: MeshZone): number {
+  if (zone === 'hero') return morphSettled(pool) ? 1 : 0;
+  if (!isMorphShapeZone(zone)) return 1;
+
+  if (isEyeZone(zone)) {
+    if (pool.morphFlying || anyDotInFlight(pool)) {
+      return morphBuildProgress(pool);
+    }
+    return pool.eyeMorphBuilt ? 1 : 0;
+  }
+
+  if (!pool.morphFlying && morphSettled(pool)) return 1;
+  return morphBuildProgress(pool);
+}
+
 export function isMorphSettled(pool: FlyingPool) {
   return morphSettled(pool);
 }
 
-function allowSecondaryEffects(pool: FlyingPool, scrolling: boolean) {
-  return morphSettled(pool) && !scrolling;
-}
-
 function allowFaceMotion(pool: FlyingPool, zone: MeshZone) {
-  return zone === 'hero' && !pool.morphFlying;
+  return zone === 'hero' && morphSettled(pool);
 }
 
 function allowHairMotion(pool: FlyingPool, zone: MeshZone) {
@@ -874,12 +1007,13 @@ function allowHairMotion(pool: FlyingPool, zone: MeshZone) {
 
 function dotTravelGate(dot: FlyingDot) {
   if (!dotInFlight(dot)) return 1;
+  if (dot.simpleFlight) return dot.flightU;
   if (dot.gatherPath) return gatherTravelGate(dot.flightU);
   return easeInOutMelancholy(dot.flightU);
 }
 
 function applyArcFlightPosition(dot: FlyingDot) {
-  const u = easeInOutMelancholy(dot.flightU);
+  const u = dot.simpleFlight ? dot.flightU : easeInOutMelancholy(dot.flightU);
   const bx = dot.srcX + (dot.tgtX - dot.srcX) * u;
   const by = dot.srcY + (dot.tgtY - dot.srcY) * u;
   if (Math.abs(dot.arcPx) < 0.5) {
@@ -1050,13 +1184,16 @@ type FlightOpts = {
   crumble?: boolean;
   zoneExit?: boolean;
   gather?: boolean;
+  simpleHero?: boolean;
+  eyeMorph?: boolean;
   hub?: ViewportGoal;
   streakUx?: number;
   streakUy?: number;
 };
 
 function beginFlight(dot: FlyingDot, rank: number, count: number, opts?: FlightOpts) {
-  const gather = opts?.gather ?? false;
+  const simpleHero = opts?.simpleHero ?? false;
+  const gather = !simpleHero && (opts?.gather ?? false);
   const zoneExit = opts?.zoneExit ?? false;
   const streak = gather && !(opts?.crumble ?? false) && !zoneExit;
   const traits = dotFlightTraits(
@@ -1071,7 +1208,8 @@ function beginFlight(dot: FlyingDot, rank: number, count: number, opts?: FlightO
   dot.srcY = dot.y;
   dot.flightU = 0;
   dot.gatherPath = gather;
-  dot.arcPx = gather ? 0 : traits.arcPx;
+  dot.simpleFlight = simpleHero;
+  dot.arcPx = simpleHero || gather ? 0 : traits.arcPx;
   if (gather && opts?.hub) {
     dot.gatherCx = opts.hub.x;
     dot.gatherCy = opts.hub.y;
@@ -1092,10 +1230,12 @@ function beginFlight(dot: FlyingDot, rank: number, count: number, opts?: FlightO
     : Math.hypot(dot.tgtX - dot.srcX, dot.tgtY - dot.srcY);
   dot.flightDur = opts?.crumble || zoneExit
     ? CRUMBLE_FLIGHT_DURATION_S
-    : FLIGHT_DURATION_S;
+    : simpleHero
+      ? (opts?.eyeMorph ? EYE_FLIGHT_DURATION_S : HERO_FLIGHT_DURATION_S)
+      : FLIGHT_DURATION_S;
   dot.speedMul = traits.speedMul;
-  dot.departLeft = traits.departDelay;
-  dot.alphaHoldLeft = opts?.holdAlpha ? traits.departDelay : 0;
+  dot.departLeft = simpleHero ? 0 : traits.departDelay;
+  dot.alphaHoldLeft = opts?.holdAlpha && !simpleHero ? traits.departDelay : 0;
   dot.displayOx = 0;
   dot.displayOy = 0;
   dot.settleBloomAt = 0;
@@ -1162,6 +1302,9 @@ export function createFlyingPool(): FlyingPool {
     morphFlying: false,
     paletteBreathOx: 0,
     paletteBreathOy: 0,
+    paletteTones: new Map(),
+    paletteSplatTones: new Map(),
+    paletteToneAnchors: new Map(),
     eyeTrackOx: 0,
     eyeTrackOy: 0,
     eyeTrackTgtOx: 0,
@@ -1173,6 +1316,11 @@ export function createFlyingPool(): FlyingPool {
     eyeFrameScaleY: 1,
     eyeFrameReady: false,
     eyeRevealArmed: false,
+    eyeMorphHold: null,
+    eyeMorphBuilt: false,
+    sprayBursts: [],
+    sprayNextBurstAt: 0,
+    sprayBurstToneIdx: 0,
   };
 }
 
@@ -1239,6 +1387,11 @@ function stepEyeMeshFrame(
     return;
   }
 
+  if (!morphSettled(pool)) {
+    pool.eyeFrameReady = false;
+    return;
+  }
+
   const measured = measureEyeMeshFrame(pool, pin, zone, now);
   if (!measured) return;
 
@@ -1298,7 +1451,15 @@ function stepEyePointerMotion(
   pool.eyeTrackOy = stepScalar(pool.eyeTrackOy, tgtOy, EYE_TRACK_SPEED, dt);
 }
 
-function starShimmer(dot: FlyingDot, now: number) {
+type DotShimmer = {
+  opacityMul: number;
+  scaleMul: number;
+  wireMul: number;
+  gate: number;
+  diamond?: boolean;
+};
+
+function starShimmer(dot: FlyingDot, now: number): DotShimmer {
   const gate = constellationShimmerGate(dot);
   if (gate <= 0.02) {
     return { opacityMul: 1, scaleMul: 1, wireMul: 1, gate: 0 };
@@ -1315,9 +1476,64 @@ function starShimmer(dot: FlyingDot, now: number) {
   return { opacityMul, scaleMul, wireMul, gate };
 }
 
+/** Kamień i obrączka StyleRank — waga dla mocniejszych błysków na górze. */
+function ringGemWeight(dot: FlyingDot, pin: MeshPinState) {
+  const lx = dot.x - (pin.docLeft + pin.stageW * 0.5);
+  const ly = dot.y - (pin.docTop + pin.stageH * 0.5);
+  const nx = lx / Math.max(pin.stageW, 1) + 0.5;
+  const ny = ly / Math.max(pin.stageH, 1) + 0.5;
+  if (ny > 0.46) return 0;
+  const cx = 1 - Math.min(1, Math.abs(nx - 0.5) / 0.3);
+  const cy = 1 - Math.min(1, ny / 0.4);
+  return Math.max(0, cx * cy);
+}
+
+/** Ostre „ognie” — jasno tylko w wąskim paśmie fali, nie ciągły glow. */
+function ringGlintPeak(wave: number, threshold: number, power: number) {
+  return Math.pow(Math.max(0, Math.abs(wave) - threshold) / (1 - threshold), power);
+}
+
+function ringDiamondShimmer(dot: FlyingDot, now: number, pin: MeshPinState): DotShimmer {
+  const settled = constellationShimmerGate(dot);
+  if (settled <= 0.02) {
+    return { opacityMul: 1, scaleMul: 1, wireMul: 1, gate: 0 };
+  }
+
+  const seed = starSeed(dot);
+  const gem = ringGemWeight(dot, pin);
+  const phase = seed * 6.283 + gem * 1.65;
+
+  const slow = Math.sin(now * (0.0013 + (seed % 1) * 0.0015) + phase);
+  const fast = Math.sin(now * (0.0042 + ((seed * PHI) % 1) * 0.0038) + phase * 1.25);
+  const glintSlow = ringGlintPeak(slow, 0.79, 2.6);
+  const glintFast = ringGlintPeak(fast, 0.85, 3.2);
+  const flash = Math.min(1, glintSlow * 0.68 + glintFast * (0.32 + gem * 0.42));
+
+  if (flash < 0.07) {
+    return { opacityMul: 1, scaleMul: 1, wireMul: 1, gate: 0, diamond: false };
+  }
+
+  const opacityMul = 1 + flash * settled * (0.16 + gem * 0.26);
+  const scaleMul = 1 + flash * settled * RING_SCALE_GLINT * (0.35 + gem * 0.65);
+  const wireMul = 1 + flash * settled * RING_WIRE_GLINT * (0.35 + gem * 0.4);
+
+  return {
+    opacityMul,
+    scaleMul,
+    wireMul,
+    gate: flash * settled,
+    diamond: flash > 0.48 && (gem > 0.14 || flash > 0.7),
+  };
+}
+
+function dotShimmer(dot: FlyingDot, now: number, zone: MeshZone, pin: MeshPinState): DotShimmer {
+  if (zone === 'ring') return ringDiamondShimmer(dot, now, pin);
+  return starShimmer(dot, now);
+}
+
 function dotDrawPos(
   dot: FlyingDot,
-  pool: FlyingPool,
+  _pool: FlyingPool,
   zone: MeshZone,
   pin: MeshPinState,
   now: number,
@@ -1329,16 +1545,6 @@ function dotDrawPos(
     const star = starOffset(dot, now, zone, heroFaceActive);
     x += star.ox;
     y += star.oy;
-  }
-  if (
-    zone === 'palette'
-    && !pool.morphFlying
-    && !dotInFlight(dot)
-    && dot.alpha > 0.03
-    && (Math.abs(pool.paletteBreathOx) > 0.01 || Math.abs(pool.paletteBreathOy) > 0.01)
-  ) {
-    x += pool.paletteBreathOx;
-    y += pool.paletteBreathOy;
   }
   if (isEyeZone(zone)) {
     const blink = eyeBlinkCover(now);
@@ -1386,6 +1592,330 @@ function heroMotionGate(dot: FlyingDot) {
   const rem = Math.hypot(dot.tgtX - dot.x, dot.tgtY - dot.y);
   if (rem > 18) return 0;
   return easeOutEmphasized(Math.min(1, dotSettle(dot)));
+}
+
+function sprayHash(seed: number) {
+  const x = Math.sin(seed * 12.9898 + seed * 0.0713) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function sprayMajesticEase(u: number) {
+  const t = Math.max(0, Math.min(1, u));
+  return 1 - (1 - t) ** SPRAY_BURST_MAJESTIC_POWER;
+}
+
+function findSprayReflectorDot(pool: FlyingPool): FlyingDot | null {
+  for (const dot of pool.dots.values()) {
+    if (dot.isReflector && dot.alpha > 0.02) return dot;
+  }
+  return null;
+}
+
+function resolveSprayBurstBasis(
+  pool: FlyingPool,
+  bundle: MeshBundle,
+  pin: MeshPinState,
+  zone: MeshZone,
+  layerOrigin: { x: number; y: number },
+  now: number,
+  heroFaceActive: boolean,
+  storedDir?: Pick<SprayBurst, 'dirX' | 'dirY' | 'perpX' | 'perpY'>,
+): SprayBurstBasis {
+  const reflector = findSprayReflectorDot(pool);
+  let nozzleDocX: number;
+  let nozzleDocY: number;
+
+  if (reflector) {
+    nozzleDocX = dotDrawX(reflector, pool, zone, pin, now, heroFaceActive);
+    nozzleDocY = dotDrawY(reflector, pool, zone, pin, now, heroFaceActive);
+  } else {
+    const fallback = normToDocument(SPRAY_NOZZLE_NORM, pin);
+    nozzleDocX = fallback.x;
+    nozzleDocY = fallback.y;
+  }
+
+  let dirX: number;
+  let dirY: number;
+  if (storedDir) {
+    dirX = storedDir.dirX;
+    dirY = storedDir.dirY;
+  } else {
+    const atlas = ensureDotAtlas(bundle, pin.stageW, pin.stageH);
+    const layout = zoneLayout(atlas, 'spray');
+    const refMeta = layout?.reflectors[0];
+    const aimDoc = refMeta
+      ? normToDocument(
+          { nx: refMeta.nx - SPRAY_AIM_LEFT_NORM_OFFSET, ny: refMeta.ny + 0.01 },
+          pin,
+        )
+      : normToDocument(SPRAY_AIM_NORM, pin);
+    dirX = aimDoc.x - nozzleDocX;
+    dirY = aimDoc.y - nozzleDocY;
+    const dLen = Math.hypot(dirX, dirY) || 1;
+    dirX /= dLen;
+    dirY /= dLen;
+  }
+
+  return {
+    ox: nozzleDocX - layerOrigin.x,
+    oy: nozzleDocY - layerOrigin.y,
+    dirX,
+    dirY,
+    perpX: -dirY,
+    perpY: dirX,
+  };
+}
+
+function buildSprayMeshEdges(nodes: SprayNode[], maxDist: number): SprayEdge[] {
+  const edges: SprayEdge[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < nodes.length; i++) {
+    const neighbors: { j: number; d: number }[] = [];
+    for (let j = 0; j < nodes.length; j++) {
+      if (i === j) continue;
+      const d = Math.hypot(nodes[i].along - nodes[j].along, nodes[i].across - nodes[j].across);
+      if (d <= maxDist) neighbors.push({ j, d });
+    }
+    neighbors.sort((a, b) => a.d - b.d);
+    for (let k = 0; k < Math.min(3, neighbors.length); k++) {
+      const j = neighbors[k].j;
+      const a = Math.min(i, j);
+      const b = Math.max(i, j);
+      const key = `${a}:${b}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      edges.push({ a, b });
+    }
+  }
+  return edges;
+}
+
+function createSprayBurst(
+  pool: FlyingPool,
+  bundle: MeshBundle,
+  pin: MeshPinState,
+  zone: MeshZone,
+  layerOrigin: { x: number; y: number },
+  accent: string,
+  now: number,
+): SprayBurst {
+  const colors = getPaletteToneColors(accent);
+  const tone = SPRAY_BURST_TONES[pool.sprayBurstToneIdx % SPRAY_BURST_TONES.length];
+  pool.sprayBurstToneIdx += 1;
+
+  const basis = resolveSprayBurstBasis(
+    pool,
+    bundle,
+    pin,
+    zone,
+    layerOrigin,
+    now,
+    false,
+  );
+
+  const stageMul = pin.stageW / 280;
+  const nodes: SprayNode[] = [];
+  const count = 20 + Math.floor(sprayHash(now * 0.017) * 12);
+  for (let i = 0; i < count; i++) {
+    const h = sprayHash(i * 2654435761 + Math.floor(now));
+    const h2 = sprayHash(i * 1597334677 + Math.floor(now * 0.1));
+    const h3 = sprayHash(i * 2246822519 + 42);
+    const along = (12 + h * h3 * 86) * stageMul;
+    const cone = 0.38 + Math.min(1, along / (82 * stageMul)) * 0.92;
+    nodes.push({
+      along,
+      across: (h2 - 0.5) * (12 + h * 36) * stageMul * cone,
+      delay: h * 0.32,
+    });
+  }
+
+  const edges = buildSprayMeshEdges(nodes, 30 * stageMul);
+
+  return {
+    startTime: now,
+    wireColor: colors[tone],
+    dirX: basis.dirX,
+    dirY: basis.dirY,
+    perpX: basis.perpX,
+    perpY: basis.perpY,
+    nodes,
+    edges,
+    dotR: Math.max(1.5, 4.2 * pool.layoutScale),
+  };
+}
+
+function stepSprayBursts(
+  pool: FlyingPool,
+  bundle: MeshBundle,
+  zone: MeshZone,
+  pin: MeshPinState,
+  layerOrigin: { x: number; y: number },
+  accent: string,
+  now: number,
+  settled: boolean,
+) {
+  if (zone !== 'spray') {
+    if (pool.sprayBursts.length > 0) pool.sprayBursts = [];
+    pool.sprayNextBurstAt = 0;
+    return;
+  }
+
+  pool.sprayBursts = pool.sprayBursts.filter((b) => now - b.startTime < SPRAY_BURST_MS);
+  if (!settled) return;
+
+  if (pool.sprayNextBurstAt <= 0) {
+    pool.sprayNextBurstAt = now + SPRAY_BURST_FIRST_DELAY_MS;
+  }
+
+  if (
+    now >= pool.sprayNextBurstAt
+    && pool.sprayBursts.length < 1
+    && findSprayReflectorDot(pool)
+  ) {
+    pool.sprayBursts.push(createSprayBurst(pool, bundle, pin, zone, layerOrigin, accent, now));
+    pool.sprayNextBurstAt =
+      now + SPRAY_BURST_MIN_GAP_MS + sprayHash(now * 0.0031) * SPRAY_BURST_GAP_SPAN_MS;
+  }
+}
+
+function sprayNodePos(
+  basis: SprayBurstBasis,
+  burst: SprayBurst,
+  node: SprayNode,
+  scale: number,
+  spreadU: number,
+) {
+  const widenU = spreadU ** SPRAY_BURST_LATERAL_TIME_POWER;
+  const lateralMul =
+    SPRAY_BURST_LATERAL_START
+    + (SPRAY_BURST_LATERAL_END - SPRAY_BURST_LATERAL_START) * widenU;
+  const acrossScale = scale * lateralMul * (0.42 + widenU * 0.72);
+  return {
+    x: basis.ox + burst.dirX * node.along * scale + burst.perpX * node.across * acrossScale,
+    y: basis.oy + burst.dirY * node.along * scale + burst.perpY * node.across * acrossScale,
+  };
+}
+
+function paintSprayBursts(
+  ctx: CanvasRenderingContext2D,
+  pool: FlyingPool,
+  bundle: MeshBundle,
+  zone: MeshZone,
+  pin: MeshPinState,
+  layerOrigin: { x: number; y: number },
+  now: number,
+  heroFaceActive: boolean,
+) {
+  if (pool.sprayBursts.length === 0) return;
+
+  ctx.lineCap = 'round';
+  const wireWidth = 0.9 * Math.max(0.9, pool.layoutScale);
+
+  for (const burst of pool.sprayBursts) {
+    const u = (now - burst.startTime) / SPRAY_BURST_MS;
+    if (u >= 1) continue;
+
+    const basis = resolveSprayBurstBasis(
+      pool,
+      bundle,
+      pin,
+      zone,
+      layerOrigin,
+      now,
+      heroFaceActive,
+      burst,
+    );
+
+    const spreadU = sprayMajesticEase(u);
+    const expand = spreadU * SPRAY_BURST_EXPAND;
+    const fadeIn = Math.min(1, u / 0.14);
+    const fadeSpan = 1 - SPRAY_BURST_FADE_START;
+    const fadeOut = u > SPRAY_BURST_FADE_START
+      ? 1 - ((u - SPRAY_BURST_FADE_START) / fadeSpan) ** 1.1
+      : 1;
+    const fade = fadeIn * fadeOut;
+
+    const positions: { x: number; y: number; alpha: number }[] = [];
+    for (const node of burst.nodes) {
+      const nodeU = u <= node.delay ? 0 : Math.min(1, (u - node.delay) / (1 - node.delay));
+      const scale = sprayMajesticEase(nodeU) * expand;
+      const pos = sprayNodePos(basis, burst, node, scale, spreadU);
+      positions.push({
+        x: pos.x,
+        y: pos.y,
+        alpha: fade * (0.45 + nodeU * 0.55),
+      });
+    }
+
+    ctx.strokeStyle = burst.wireColor;
+    ctx.lineWidth = wireWidth;
+    for (const edge of burst.edges) {
+      const a = positions[edge.a];
+      const b = positions[edge.b];
+      if (!a || !b) continue;
+      const edgeAlpha = Math.min(a.alpha, b.alpha);
+      if (edgeAlpha < 0.03) continue;
+      ctx.globalAlpha = edgeAlpha;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = DOT_GRAY;
+    for (const pos of positions) {
+      if (pos.alpha < 0.03) continue;
+      ctx.globalAlpha = pos.alpha * DOT_ALPHA;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, burst.dotR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+/** Oddech w stronę przycisku — tylko po morphu, bez zmiany layoutu / obrotu. */
+function applyContactArrowPoint(
+  pool: FlyingPool,
+  zone: MeshZone,
+  now: number,
+  settled: boolean,
+) {
+  if (zone !== 'contactArrow') return;
+
+  for (const dot of pool.dots.values()) {
+    dot.displayOx = 0;
+    dot.displayOy = 0;
+  }
+  if (!settled) return;
+
+  const slotEl = document.getElementById(CONTACT_MESH_ANCHOR_ID);
+  const ctaEl = document.getElementById(CONTACT_CTA_ANCHOR_ID);
+  if (!slotEl || !ctaEl) return;
+
+  const slot = slotEl.getBoundingClientRect();
+  const cta = ctaEl.getBoundingClientRect();
+  const sx = window.scrollX;
+  const sy = window.scrollY;
+  const cx = slot.left + slot.width * 0.52 + sx;
+  const cy = slot.top + slot.height * 0.55 + sy;
+  const tx = cta.left + cta.width * 0.48 + sx;
+  const ty = cta.top + cta.height * 0.5 + sy;
+  let dx = tx - cx;
+  let dy = ty - cy;
+  const len = Math.hypot(dx, dy) || 1;
+  dx /= len;
+  dy /= len;
+
+  const breathe = 0.5 + 0.5 * Math.sin(now * 0.0025);
+  const push = 8 + breathe * 20;
+
+  for (const dot of pool.dots.values()) {
+    if (dot.alpha < 0.06 && dot.tgtAlpha < 0.06) continue;
+    dot.displayOx = dx * push;
+    dot.displayOy = dy * push;
+  }
 }
 
 function applyHeroFaceMotion(
@@ -1626,6 +2156,7 @@ function wireTargetAlpha(
   dotB: FlyingDot,
   pool: FlyingPool,
   zone: MeshZone,
+  pin: MeshPinState,
   layoutScale: number,
   now: number,
   allowBloom: boolean,
@@ -1680,10 +2211,14 @@ function wireTargetAlpha(
   const visB = dotDisplayAlpha(dotB);
   let alpha = Math.min(visA, visB) * settleGate * lenGate * WIRE_BODY_ALPHA;
   alpha *= travel;
+  if (isEyeZone(zone)) {
+    const buildT = computeMorphBuildT(pool, zone);
+    alpha *= easeOutEmphasized(Math.max(0, Math.min(1, (buildT - 0.12) / 0.88)));
+  }
   if (alpha <= 0.02) return 0;
 
-  const shA = starShimmer(dotA, now);
-  const shB = starShimmer(dotB, now);
+  const shA = dotShimmer(dotA, now, zone, pin);
+  const shB = dotShimmer(dotB, now, zone, pin);
   const wireTwinkle = shA.gate > 0.02 || shB.gate > 0.02
     ? (shA.wireMul + shB.wireMul) * 0.5
     : 1;
@@ -1727,12 +2262,18 @@ function syncWireCanvas(canvas: HTMLCanvasElement, layer: HTMLElement) {
   return { w, h, dpr };
 }
 
-function clearWireCanvas(canvas: HTMLCanvasElement, layer: HTMLElement) {
-  const { w, h, dpr } = syncWireCanvas(canvas, layer);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, w, h);
+function paletteWireColor(
+  zone: MeshZone,
+  dotA: FlyingDot,
+  dotB: FlyingDot,
+  paletteColors: PaletteToneColors | null,
+): string | null {
+  if (zone !== 'palette' || !paletteColors) return null;
+  const toneA = dotA.paletteTone;
+  const toneB = dotB.paletteTone;
+  if (!toneA || !toneB || toneA === 'wire' || toneB === 'wire') return null;
+  if (toneA !== toneB) return null;
+  return paletteColors[toneA];
 }
 
 function paintWires(
@@ -1747,6 +2288,7 @@ function paintWires(
   allowBloom: boolean,
   allowHair: boolean,
   heroFaceActive: boolean,
+  paletteColors: PaletteToneColors | null = null,
 ) {
   const { w, h, dpr } = syncWireCanvas(canvas, layer);
   const ctx = canvas.getContext('2d');
@@ -1771,9 +2313,10 @@ function paintWires(
     if (alpha <= 0.02) return;
     const travel = Math.min(dotTravelGate(dotA), dotTravelGate(dotB));
     const isHair = edge.group === 'hair';
+    const matchedPalette = paletteWireColor(wireZone, dotA, dotB, paletteColors);
     const color = isHair && hairWires
       ? mixHex(DOT_GRAY, accent, Math.min(dotA.hairMix, dotB.hairMix))
-      : 'rgba(255,255,255,0.92)';
+      : matchedPalette ?? 'rgba(255,255,255,0.92)';
     const width =
       (isHair ? 1.0 : 0.9) * Math.max(0.9, pool.layoutScale) * (0.82 + travel * 0.22);
     let ax = dotDrawX(dotA, pool, wireZone, pin, now, heroFaceActive) - layerOrigin.x;
@@ -1842,6 +2385,7 @@ function paintWires(
         dotB,
         pool,
         zone,
+        pin,
         pool.layoutScale,
         now,
         allowBloom,
@@ -1862,6 +2406,122 @@ function paintWires(
   }
 
   ctx.globalAlpha = 1;
+}
+
+function paintPaletteCanvasDots(
+  canvas: HTMLCanvasElement,
+  pool: FlyingPool,
+  zone: MeshZone,
+  pin: MeshPinState,
+  layerOrigin: { x: number; y: number },
+  r: number,
+  paletteColors: PaletteToneColors,
+  now: number,
+) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const batches = new Map<string, { x: number; y: number; alpha: number }[]>();
+
+  for (const dot of pool.dots.values()) {
+    if (!dot.id.startsWith('h:') || dot.paletteTone == null) continue;
+    const alpha = dotDisplayAlpha(dot);
+    if (alpha < 0.04) continue;
+
+    const tone = dot.paletteTone;
+    if (tone === 'wire') continue;
+    const color = paletteColors[tone];
+    let bucket = batches.get(color);
+    if (!bucket) {
+      bucket = [];
+      batches.set(color, bucket);
+    }
+
+    const settled = !dotInFlight(dot) && dot.flightU >= 0.99 && dot.departLeft <= 0.01;
+    const anchor = dot.hostId != null ? pool.paletteToneAnchors.get(dot.hostId) : undefined;
+    let px: number;
+    let py: number;
+    if (anchor && settled) {
+      const doc = normToDocument(
+        { nx: anchor.x / pin.stageW, ny: anchor.y / pin.stageH },
+        pin,
+      );
+      const star = starOffset(dot, now, zone, false);
+      px = doc.x + star.ox - layerOrigin.x;
+      py = doc.y + star.oy - layerOrigin.y;
+    } else {
+      px = dotDrawX(dot, pool, zone, pin, now, false) - layerOrigin.x;
+      py = dotDrawY(dot, pool, zone, pin, now, false) - layerOrigin.y;
+    }
+
+    bucket.push({ x: px, y: py, alpha });
+  }
+
+  for (const [color, points] of batches) {
+    ctx.fillStyle = color;
+    for (const point of points) {
+      ctx.globalAlpha = point.alpha;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+/** Budowa twarzy — batch na canvas zamiast ~600 aktualizacji DOM / klatkę. */
+function paintHeroMorphCanvasDots(
+  canvas: HTMLCanvasElement,
+  pool: FlyingPool,
+  zone: MeshZone,
+  pin: MeshPinState,
+  layerOrigin: { x: number; y: number },
+  r: number,
+  now: number,
+) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return 0;
+
+  let count = 0;
+  const gray: { x: number; y: number; alpha: number }[] = [];
+  const white: { x: number; y: number; alpha: number; rad: number }[] = [];
+
+  for (const dot of pool.dots.values()) {
+    if (dot.alpha <= 0.03 && dot.tgtAlpha <= 0.03) continue;
+    const alpha = dotDisplayAlpha(dot);
+    if (alpha < 0.04) continue;
+
+    const px = dotDrawX(dot, pool, zone, pin, now, false) - layerOrigin.x;
+    const py = dotDrawY(dot, pool, zone, pin, now, false) - layerOrigin.y;
+    count += 1;
+
+    if (dot.isReflector) {
+      const rad = reflectorAnchorR(dot, pool, r);
+      white.push({ x: px, y: py, alpha: Math.min(1, alpha * DOT_ALPHA), rad });
+    } else if (dot.id.startsWith('h:')) {
+      gray.push({ x: px, y: py, alpha: Math.min(1, alpha * DOT_ALPHA) });
+    }
+  }
+
+  ctx.fillStyle = DOT_GRAY;
+  for (const p of gray) {
+    ctx.globalAlpha = p.alpha;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = '#ffffff';
+  for (const p of white) {
+    ctx.globalAlpha = p.alpha;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.globalAlpha = 1;
+  return count;
 }
 
 function ensureDot(
@@ -1917,6 +2577,7 @@ function ensureDot(
     streakUx: 0,
     streakUy: 1,
     gatherPath: false,
+    simpleFlight: false,
     alpha: 0,
     tgtAlpha: 0,
     isHair,
@@ -1929,6 +2590,7 @@ function ensureDot(
     reflectorPhase: 0,
     reflectorR: 0,
     reflectorHostId: null,
+    paletteTone: null,
   };
   pool.dots.set(id, dot);
   return dot;
@@ -1947,6 +2609,7 @@ function syncFlyingTargets(
   accent: string,
   zoneChanged: boolean,
 ) {
+  const layoutT0 = performance.now();
   const layout = viewportGoalsForZone(zone, bundle, paletteAim, pins);
   if (!layout) return;
 
@@ -1956,6 +2619,9 @@ function syncFlyingTargets(
   }
 
   pool.wireEdges = layout.edges;
+  pool.paletteTones = zone === 'palette' ? layout.paletteTones : new Map();
+  pool.paletteSplatTones = zone === 'palette' ? layout.paletteSplatTones : new Map();
+  pool.paletteToneAnchors = zone === 'palette' ? layout.paletteToneAnchors : new Map();
 
   const prevZoneIds = new Set<string>();
   if (zoneChanged && pool.activeZone) {
@@ -1964,6 +2630,7 @@ function syncFlyingTargets(
       for (const id of prevLayout.goals.keys()) prevZoneIds.add(id);
     }
   }
+  lastSyncLayoutMs = performance.now() - layoutT0;
 
   const visibleBefore = new Set<string>();
   for (const id of prevZoneIds) {
@@ -1983,11 +2650,11 @@ function syncFlyingTargets(
     layout.reflectors.map((ref) => [ref.targetId, ref] as const),
   );
 
+  const ensureT0 = performance.now();
   for (const [id, goal] of layout.goals) {
     activeIds.add(id);
     const wasInPrevZone = prevZoneIds.has(id);
     const dot = ensureDot(pool, layer, id, dotClass, hairClass, hairIds, accent, size, goal);
-
     if (id.startsWith('l:')) {
       const targetId = Number(id.slice(2));
       const ref = reflectorById.get(targetId);
@@ -2006,6 +2673,11 @@ function syncFlyingTargets(
     dot.tgtY = goal.y;
     dot.tgtAlpha = DOT_ALPHA;
     dot.tgtHairMix = dot.isHair && zone === 'hero' ? 1 : 0;
+    if (zone === 'palette' && dot.hostId != null) {
+      dot.paletteTone = layout.paletteTones.get(dot.hostId) ?? 'wire';
+    } else {
+      dot.paletteTone = null;
+    }
     if (zoneChanged && dot.isHair && zone === 'hero') {
       dot.hairMix = 0;
     }
@@ -2056,15 +2728,29 @@ function syncFlyingTargets(
     ? computeStreakLayout(morphDots, flightHub)
     : null;
 
+  const enteringHero = zone === 'hero' && (zoneChanged || pool.activeZone == null);
+  const enteringEye = isEyeZone(zone) && zoneChanged;
+  const simpleMorph = enteringHero || enteringEye;
+
+  if (enteringEye) {
+    pool.eyeMorphBuilt = false;
+  }
+
   for (const id of flightStarts) {
     const dot = pool.dots.get(id);
     if (!dot) continue;
+    if (enteringEye) {
+      dot.alpha = 0;
+      dot.paintKey = undefined;
+    }
     const rank = streakLayout?.ranks.get(id) ?? 0;
     beginFlight(dot, rank, flightStarts.length, {
-      gather: true,
-      hub: flightHub ?? undefined,
-      streakUx: streakLayout?.ux,
-      streakUy: streakLayout?.uy,
+      gather: !simpleMorph,
+      simpleHero: simpleMorph,
+      eyeMorph: enteringEye,
+      hub: simpleMorph ? undefined : flightHub ?? undefined,
+      streakUx: simpleMorph ? undefined : streakLayout?.ux,
+      streakUy: simpleMorph ? undefined : streakLayout?.uy,
     });
   }
   if (flightStarts.length > 0) {
@@ -2128,6 +2814,8 @@ function syncFlyingTargets(
       crumble: true,
     });
   }
+
+  lastSyncEnsureDotsMs = performance.now() - ensureT0;
 }
 
 function desiredHairMix(dot: FlyingDot) {
@@ -2143,8 +2831,12 @@ function desiredHairMix(dot: FlyingDot) {
   return dot.flightU >= 1 ? 1 : 0;
 }
 
-function stepHairMix(dot: FlyingDot, dt: number) {
+function stepHairMix(dot: FlyingDot, dt: number, hairMotionReady: boolean) {
   if (!dot.isHair) return;
+  if (!hairMotionReady) {
+    dot.hairMix = stepScalar(dot.hairMix, 0, HAIR_COLOR_SPEED * 1.6, dt);
+    return;
+  }
   const desired = desiredHairMix(dot);
   if (dotInFlight(dot) || dot.departLeft > 0.01 || dot.flightU < 0.999) {
     dot.hairMix = desired;
@@ -2165,13 +2857,19 @@ function paintDot(
   settleBloomClass: string,
   starClass: string,
   reflectorClass: string,
+  diamondClass: string,
   now: number,
   zone: MeshZone,
   pin: MeshPinState,
   allowBloom: boolean,
   heroFaceActive: boolean,
+  paletteColors: PaletteToneColors | null = null,
+  liteEffects = false,
 ) {
   const inFlight = dotInFlight(dot);
+  const paletteSplatDot = zone === 'palette'
+    && dot.paletteTone != null
+    && dot.paletteTone !== 'wire';
   const eyeIrisZone = isEyeZone(zone);
   const ignite = dot.isReflector && eyeIrisZone
     ? dot.alpha
@@ -2203,31 +2901,41 @@ function paintDot(
     return;
   }
 
-  const bloom = dotSettleBloom(dot, now, allowBloom);
-  const shimmer = starShimmer(dot, now);
-  let scale = (inFlight ? dotFlightScale(dot) : 1) * shimmer.scaleMul;
+  const bloom = paletteSplatDot || liteEffects ? 0 : dotSettleBloom(dot, now, allowBloom);
+  const shimmer = paletteSplatDot || liteEffects
+    ? { opacityMul: 1, scaleMul: 1, wireMul: 1, gate: 0 }
+    : dotShimmer(dot, now, zone, pin);
+  let scale = (inFlight && !liteEffects ? dotFlightScale(dot) : 1) * shimmer.scaleMul;
   if (bloom > 0.02) scale *= 1 + bloom * (SETTLE_BLOOM_SCALE - 1);
   const drawR = r * scale;
   const drawSize = Math.round(drawR * 2 * 10) / 10;
   const bloomCls = bloom > 0.04 ? ` ${settleBloomClass}` : '';
   const starCls = shimmer.gate > 0.04 ? ` ${starClass}` : '';
+  const diamondCls = shimmer.diamond && diamondClass ? ` ${diamondClass}` : '';
   const hairTint = dot.isHair ? Math.max(0, Math.min(1, dot.hairMix)) : 0;
   const showHairStyle = hairTint > 0.22;
   const cls = inFlight
-    ? `${dotClass} ${flightClass}${showHairStyle ? ` ${hairClass}` : ''}${starCls}${bloomCls}`
-    : `${dotClass}${showHairStyle ? ` ${hairClass}` : ''}${starCls}${bloomCls}`;
+    ? `${dotClass} ${flightClass}${showHairStyle ? ` ${hairClass}` : ''}${diamondCls}${starCls}${bloomCls}`
+    : `${dotClass}${showHairStyle ? ` ${hairClass}` : ''}${diamondCls}${starCls}${bloomCls}`;
+  const eyeBuildGate = isEyeZone(zone) ? computeMorphBuildT(pool, zone) : 1;
   const opacity = Math.min(
     1,
-    (dotDisplayAlpha(dot) + bloom * SETTLE_BLOOM_OPACITY) * shimmer.opacityMul,
+    (dotDisplayAlpha(dot) + bloom * SETTLE_BLOOM_OPACITY) * shimmer.opacityMul * eyeBuildGate,
   );
   const starActive = constellationPositionGate(dot) > 0.04;
   const leftRaw = dotDrawX(dot, pool, zone, pin, now, heroFaceActive) - layerOrigin.x - drawR;
   const topRaw = dotDrawY(dot, pool, zone, pin, now, heroFaceActive) - layerOrigin.y - drawR;
   const left = starActive ? leftRaw : Math.round(leftRaw * 10) / 10;
   const top = starActive ? topRaw : Math.round(topRaw * 10) / 10;
-  const bg = dot.isHair
+  let bg = dot.isHair
     ? mixHex(DOT_GRAY, accent, hairTint)
-    : DOT_GRAY;
+    : paletteSplatDot && paletteColors
+      ? paletteColors[dot.paletteTone!]
+      : DOT_GRAY;
+  if (zone === 'ring' && shimmer.diamond) {
+    const gemT = 0.18 + 0.72 * Math.min(1, shimmer.gate);
+    bg = mixHex(DOT_GRAY, '#ffffff', gemT);
+  }
   const key = `${cls}|${drawSize}|${opacity.toFixed(3)}|${left}|${top}|${bg}`;
   if (!starActive && shimmer.gate <= 0.04 && dot.paintKey === key) return;
   dot.paintKey = key;
@@ -2237,10 +2945,12 @@ function paintDot(
   dot.el.style.height = `${drawSize}px`;
   dot.el.style.opacity = String(opacity);
   dot.el.style.transform = `translate3d(${left}px,${top}px,0)`;
-  if (dot.isHair) {
+  if (dot.isHair || paletteSplatDot) {
     dot.el.style.setProperty('background', bg, 'important');
+    dot.el.style.boxShadow = '';
   } else if (dot.el.style.background !== DOT_GRAY) {
     dot.el.style.setProperty('background', DOT_GRAY, 'important');
+    dot.el.style.boxShadow = '';
   }
 }
 
@@ -2275,10 +2985,17 @@ export function tickFlyingDots(
   settleBloomClass = '',
   starClass = '',
   reflectorClass = '',
+  diamondClass = '',
   opts: TickFlyingDotsOptions = {},
 ) {
+  const tickStart = performance.now();
+  const pinsT0 = performance.now();
   const pins = computeAllZonePins(opts.meshFrameId ?? -1);
+  const pinsMs = performance.now() - pinsT0;
   if (!pins) return;
+
+  let syncMs = 0;
+  let stepMs = 0;
 
   const liveAim = pins.paletteAim ?? paletteAim;
 
@@ -2291,7 +3008,42 @@ export function tickFlyingDots(
   pool.viewportKey = viewportKey;
 
   const scrollDir = stepScrollBuildDir();
-  const zone = resolveActiveMeshZone();
+  const scrollZone = resolveActiveMeshZone();
+  let zone = scrollZone;
+  if (zone === 'palette' && !pins.palette) zone = 'hero';
+
+  let eyeMorphSyncedThisTick = false;
+
+  if (pool.eyeMorphHold) {
+    if (scrollZone !== pool.eyeMorphHold) {
+      pool.eyeMorphHold = null;
+    } else if (isEyeAnchorInView(pool.eyeMorphHold)) {
+      const held = pool.eyeMorphHold;
+      pool.eyeMorphHold = null;
+      logPerfEvent('oko: start morphu', { zone: held });
+      zone = held;
+      syncFlyingTargets(
+        pool,
+        layer,
+        bundle,
+        held,
+        liveAim,
+        pins,
+        dotClass,
+        hairClass,
+        hairIds,
+        accent,
+        pool.activeZone != null,
+      );
+      pool.activeZone = held;
+      pool.pinKey = pinLayoutKey(pins);
+      pool.activeLayoutKey = activeZoneLayoutKey(held, pins);
+      eyeMorphSyncedThisTick = true;
+    } else if (pool.activeZone) {
+      zone = pool.activeZone;
+    }
+  }
+
   const pinKey = pinLayoutKey(pins);
   const layoutKey = activeZoneLayoutKey(zone, pins);
   const zoneChanged = pool.activeZone !== zone;
@@ -2306,6 +3058,12 @@ export function tickFlyingDots(
     pool.eyeRevealArmed = false;
     resetHairWireReveal(pool);
     resetEyeIrisReveal();
+    if (pool.activeZone === 'contactArrow') {
+      for (const dot of pool.dots.values()) {
+        dot.displayOx = 0;
+        dot.displayOy = 0;
+      }
+    }
     for (const dot of pool.dots.values()) {
       dot.paintKey = undefined;
     }
@@ -2318,27 +3076,39 @@ export function tickFlyingDots(
     pool.activeZone = zone;
     pool.pinKey = pinKey;
     pool.activeLayoutKey = layoutKey;
-  } else if (zoneChanged || pool.activeZone == null) {
-    syncFlyingTargets(
-      pool,
-      layer,
-      bundle,
-      zone,
-      liveAim,
-      pins,
-      dotClass,
-      hairClass,
-      hairIds,
-      accent,
-      zoneChanged && pool.activeZone != null,
-    );
-    pool.activeZone = zone;
-    pool.pinKey = pinKey;
-    pool.activeLayoutKey = layoutKey;
+  } else if ((zoneChanged || pool.activeZone == null) && !eyeMorphSyncedThisTick) {
+    if (isEyeZone(scrollZone) && !isEyeAnchorInView(scrollZone)) {
+      pool.eyeMorphHold = scrollZone;
+      logPerfEvent('oko: morph wstrzymany (poza viewport)', { zone: scrollZone });
+    } else {
+      const syncT0 = performance.now();
+      syncFlyingTargets(
+        pool,
+        layer,
+        bundle,
+        zone,
+        liveAim,
+        pins,
+        dotClass,
+        hairClass,
+        hairIds,
+        accent,
+        zoneChanged && pool.activeZone != null,
+      );
+      syncMs = performance.now() - syncT0;
+      pool.activeZone = zone;
+      pool.pinKey = pinKey;
+      pool.activeLayoutKey = layoutKey;
+    }
   } else if (anchorChanged) {
-    const sizeChanged =
-      layoutStageSizeFromKey(layoutKey) !== layoutStageSizeFromKey(pool.activeLayoutKey);
-    syncRigidLayoutFollow(pool, bundle, zone, liveAim, pins, sizeChanged, dt);
+    const eyeBuilding = isEyeZone(zone) && (pool.morphFlying || anyDotInFlight(pool));
+    const contactMorphing =
+      zone === 'contactArrow' && (pool.morphFlying || anyDotInFlight(pool));
+    if (!eyeBuilding && !contactMorphing) {
+      const sizeChanged =
+        layoutStageSizeFromKey(layoutKey) !== layoutStageSizeFromKey(pool.activeLayoutKey);
+      syncRigidLayoutFollow(pool, bundle, zone, liveAim, pins, sizeChanged, dt);
+    }
     pool.pinKey = pinKey;
     pool.activeLayoutKey = layoutKey;
   } else if (layoutChanged) {
@@ -2346,15 +3116,12 @@ export function tickFlyingDots(
   }
 
   const scrolling = opts.scrolling ?? false;
-  if (scrolling && !morphSettled(pool)) {
-    pool.retiringWireEdges = [];
-    pool.retiringWireZone = null;
-  }
 
   pool.layoutScale = stepScalar(pool.layoutScale, pool.tgtLayoutScale, SCALE_SPEED, dt);
   const r = Math.max(1.4, 4.5 * pool.layoutScale);
   const now = performance.now();
 
+  const stepT0 = performance.now();
   for (const dot of pool.dots.values()) {
     stepFlight(dot, dt, now);
     if (dot.alphaHoldLeft > 0) {
@@ -2368,40 +3135,27 @@ export function tickFlyingDots(
     }
   }
 
+  stepMs = performance.now() - stepT0;
+
   updateMorphBloom(pool, now);
   if (morphSettled(pool)) {
     pool.retiringWireEdges = [];
     pool.retiringWireZone = null;
+    if (isEyeZone(zone)) {
+      pool.eyeMorphBuilt = true;
+    }
+  }
+  if (!isEyeZone(zone)) {
+    pool.eyeMorphBuilt = false;
   }
 
-  const secondaryReady = allowSecondaryEffects(pool, scrolling);
   const settleBloomReady = allowSettleBloom(scrolling);
   const faceReady = allowFaceMotion(pool, zone);
   const hairReady = allowHairMotion(pool, zone);
   stepHairWireReveal(pool, zone, now);
 
-  if (zone === 'palette' && secondaryReady && liveAim) {
-    const palettePin = pinForZonePins(pins, 'palette');
-    const originX = palettePin.docLeft + palettePin.stageW * 0.5;
-    const originY = palettePin.docTop + palettePin.stageH * PALETTE_BREATH_ORIGIN_Y_RATIO;
-    const aimX = palettePin.docLeft + liveAim.x;
-    const aimY = palettePin.docTop + liveAim.y;
-    const dx = aimX - originX;
-    const dy = aimY - originY;
-    const len = Math.hypot(dx, dy);
-    if (len > 1) {
-      const phase = Math.sin((now / PALETTE_BREATH_CYCLE_MS) * Math.PI * 2);
-      const travel = phase * PALETTE_BREATH_TRAVEL_PX;
-      pool.paletteBreathOx = (dx / len) * travel;
-      pool.paletteBreathOy = (dy / len) * travel;
-    } else {
-      pool.paletteBreathOx = 0;
-      pool.paletteBreathOy = 0;
-    }
-  } else {
-    pool.paletteBreathOx = 0;
-    pool.paletteBreathOy = 0;
-  }
+  pool.paletteBreathOx = 0;
+  pool.paletteBreathOy = 0;
 
   const settled = morphSettled(pool);
 
@@ -2436,14 +3190,16 @@ export function tickFlyingDots(
     hairReady,
     faceReady,
   );
+  applyContactArrowPoint(pool, zone, now, settled);
 
   const heroFaceActive = faceReady && zone === 'hero';
   const activePin = pinForZonePins(pins, zone);
+  stepSprayBursts(pool, bundle, zone, activePin, layerOrigin, accent, now, settled);
   stepEyePointerMotion(pool, activePin, zone, pointer, dt);
   stepEyeMeshFrame(pool, activePin, zone, now, dt);
 
   for (const dot of pool.dots.values()) {
-    stepHairMix(dot, dt);
+    stepHairMix(dot, dt, hairReady);
   }
 
   publishMeshMotionState({
@@ -2464,14 +3220,52 @@ export function tickFlyingDots(
       : { ready: false, ox: 0, oy: 0, scale: 1, scaleX: 1, scaleY: 1 },
   });
 
+  const palettePaintVisible = zone !== 'palette' || isStudioPaletyInView();
+  const paletteColors = zone === 'palette' ? getPaletteToneColors(accent) : null;
+  const paletteCanvasDots = zone === 'palette' && palettePaintVisible;
+  const heroMorphLite = zone === 'hero' && !settled;
+  const heroCanvasDots = heroMorphLite;
+
+  let paintDotsMs = 0;
+  let paintWiresMs = 0;
+  let domPaints = 0;
+  let canvasDots = 0;
+  let visibleDots = 0;
+  let activeDots = 0;
+
   if (!opts.skipPaint) {
+    const paintDotsStart = performance.now();
+
     for (const dot of pool.dots.values()) {
+      if (dot.alpha > 0.03 || dot.tgtAlpha > 0.03) activeDots += 1;
       if (dot.alpha <= 0.03 && dot.tgtAlpha <= 0.03) {
         dot.alpha = 0;
         dot.el.style.opacity = '0';
         continue;
       }
 
+      if (!palettePaintVisible) {
+        dot.el.style.opacity = '0';
+        continue;
+      }
+
+      if (
+        paletteCanvasDots
+        && dot.paletteTone
+        && dot.paletteTone !== 'wire'
+      ) {
+        dot.el.style.opacity = '0';
+        continue;
+      }
+
+      if (heroCanvasDots) {
+        dot.el.style.opacity = '0';
+        if (dot.alpha > 0.03 || dot.tgtAlpha > 0.03) canvasDots += 1;
+        continue;
+      }
+
+      visibleDots += 1;
+      domPaints += 1;
       paintDot(
         dot,
         pool,
@@ -2484,35 +3278,115 @@ export function tickFlyingDots(
         settleBloomClass,
         starClass,
         reflectorClass,
+        diamondClass,
         now,
         zone,
         activePin,
         settleBloomReady,
         heroFaceActive,
+        paletteColors,
+        heroMorphLite,
       );
     }
 
+    paintDotsMs = performance.now() - paintDotsStart;
+
     const stride = opts.wireStride ?? 1;
     const wireFrame = opts.wireFrame ?? 0;
-    const wireMorphing = !morphSettled(pool) || pool.morphFlying || pool.retiringWireEdges.length > 0;
     if (!opts.skipWirePaint && wireCanvas && wireFrame % stride === 0) {
-      if (scrolling && wireMorphing) {
-        clearWireCanvas(wireCanvas, layer);
-      } else {
-        paintWires(
-          pool,
+      const wiresStart = performance.now();
+      paintWires(
+        pool,
+        wireCanvas,
+        layer,
+        zone,
+        activePin,
+        accent,
+        layerOrigin,
+        now,
+        heroMorphLite ? false : settleBloomReady,
+        hairReady,
+        heroFaceActive,
+        paletteColors,
+      );
+      if (paletteCanvasDots && paletteColors) {
+        paintPaletteCanvasDots(
           wireCanvas,
-          layer,
+          pool,
           zone,
           activePin,
-          accent,
           layerOrigin,
+          r,
+          paletteColors,
           now,
-          settleBloomReady,
-          hairReady,
-          heroFaceActive,
+        );
+      } else if (heroCanvasDots) {
+        canvasDots = paintHeroMorphCanvasDots(
+          wireCanvas,
+          pool,
+          zone,
+          activePin,
+          layerOrigin,
+          r,
+          now,
         );
       }
+      if (zone === 'spray' && pool.sprayBursts.length > 0) {
+        const sprayCtx = wireCanvas.getContext('2d');
+        if (sprayCtx) {
+          paintSprayBursts(
+            sprayCtx,
+            pool,
+            bundle,
+            zone,
+            activePin,
+            layerOrigin,
+            now,
+            heroFaceActive,
+          );
+        }
+      }
+      paintWiresMs = performance.now() - wiresStart;
     }
+  }
+
+  const totalMs = performance.now() - tickStart;
+  const phases = {
+    pins: pinsMs,
+    sync: syncMs,
+    syncLayout: lastSyncLayoutMs,
+    syncEnsureDots: lastSyncEnsureDotsMs,
+    atlasBuild: atlasBuildThisTick,
+    step: stepMs,
+    paintDots: paintDotsMs,
+    paintWires: paintWiresMs,
+    total: totalMs,
+  };
+  atlasBuildThisTick = 0;
+
+  publishTickPhases(phases);
+  const morphBuildT = computeMorphBuildT(pool, zone);
+  const morphFlying = pool.morphFlying;
+  setTickSpikeContext(zone, zoneChanged, totalMs, {
+    morphFlying,
+    morphBuildT,
+    activeDots,
+  });
+
+  if (isPerfMonitorEnabled()) {
+    publishMeshPerfStats({
+      meshTickMs: totalMs,
+      paintDotsMs,
+      paintWiresMs,
+      activeDots,
+      visibleDots: heroCanvasDots ? canvasDots : visibleDots,
+      domPaints,
+      canvasDots,
+      wireEdges: pool.wireEdges.length,
+      zone,
+      morphBuildT,
+      morphFlying,
+      phases,
+    });
   }
 }

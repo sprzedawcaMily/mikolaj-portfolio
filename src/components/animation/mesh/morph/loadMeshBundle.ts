@@ -3,18 +3,20 @@ import {
   segmentMidpointInEyeIris,
 } from '@/components/animation/parseKamochiEyeSvg';
 import { parseFaceMesh } from '@/components/animation/mesh/faceMesh';
+import { parsePaletteSvgMesh } from '@/components/animation/mesh/parsePaletteMesh';
 import { parseSvgMesh, type SvgMesh } from '@/components/animation/mesh/svgMesh';
 import type { MeshZone } from '@/hooks/meshScrollEngine';
 import type { MeshBundle } from './types';
 
 const FACE_SOURCE = '/images/profile/Group%205.svg?v=svg-mesh-5';
-const ARROW_SOURCE = '/images/profile/Group%201.svg?v=arrow-mesh-5';
+const PALETTE_SOURCE = '/images/profile/paleta.svg?v=palette-mesh-3';
 const BUS_SOURCE = '/images/transitrank/autobus.svg?v=bus-mesh-16';
 const FORK_SOURCE = '/images/forkfull/widelec.svg?v=fork-mesh-5';
 const SPRAY_SOURCE = '/images/kamochi/sprej.svg?v=spray-mesh-4';
 const LOUPE_SOURCE = '/images/kamochi/lupa.svg?v=loupe-mesh-5';
 const RING_SOURCE = '/images/kamochi/pierscionek.svg?v=ring-mesh-4';
 const EYE_SOURCE = '/images/kamochi/oko2.svg?v=eye-mesh-3';
+const CONTACT_ARROW_SOURCE = '/images/profile/strzalak.svg?v=contact-arrow-2';
 
 function parseEyeMesh(svgText: string): SvgMesh {
   const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
@@ -60,19 +62,20 @@ async function fetchSvg(url: string) {
 }
 
 export async function loadMeshBundle(): Promise<MeshBundle> {
-  const [faceSvg, arrowSvg, busSvg, forkSvg, spraySvg, loupeSvg, ringSvg, eyeSvg] = await Promise.all([
+  const [faceSvg, paletteSvg, busSvg, forkSvg, spraySvg, loupeSvg, ringSvg, eyeSvg, arrowSvg] = await Promise.all([
     fetch(FACE_SOURCE).then((r) => r.text()),
-    fetchSvg(ARROW_SOURCE),
+    fetchSvg(PALETTE_SOURCE),
     fetchSvg(BUS_SOURCE),
     fetchSvg(FORK_SOURCE),
     fetchSvg(SPRAY_SOURCE),
     fetchSvg(LOUPE_SOURCE),
     fetchSvg(RING_SOURCE),
     fetchSvg(EYE_SOURCE),
+    fetchSvg(CONTACT_ARROW_SOURCE),
   ]);
 
   const zoneMeshes: Partial<Record<MeshZone, SvgMesh>> = {};
-  if (arrowSvg) zoneMeshes.palette = parseSvgMesh(arrowSvg, { strictLineSnap: true });
+  if (paletteSvg) zoneMeshes.palette = parsePaletteSvgMesh(paletteSvg);
   if (busSvg) zoneMeshes.bus = parseSvgMesh(busSvg, { strictLineSnap: true });
   if (forkSvg) zoneMeshes.fork = parseSvgMesh(forkSvg, { strictLineSnap: false });
   if (spraySvg) zoneMeshes.spray = parseSvgMesh(spraySvg, { strictLineSnap: true });
@@ -82,6 +85,9 @@ export async function loadMeshBundle(): Promise<MeshBundle> {
     const eyeMesh = parseEyeMesh(eyeSvg);
     zoneMeshes.careerEye = eyeMesh;
     zoneMeshes.skillsEye = eyeMesh;
+  }
+  if (arrowSvg) {
+    zoneMeshes.contactArrow = parseSvgMesh(arrowSvg, { strictLineSnap: true });
   }
 
   return { faceMesh: parseFaceMesh(faceSvg), zoneMeshes };

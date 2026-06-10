@@ -1,3 +1,4 @@
+import type { PaletteTone } from '@/components/animation/mesh/parsePaletteMesh';
 import type { ThemeTokens } from './types';
 
 export const DEFAULT_ACCENT = '#7C3AED';
@@ -121,6 +122,41 @@ export function accentHue(hex: string): number {
 
 export function accentFromHue(hue: number): string {
   return hslToHex(hue, 88, 56);
+}
+
+export type PaletteToneColors = Record<PaletteTone, string>;
+
+let paletteColorsCacheKey = '';
+let paletteColorsCache: PaletteToneColors | null = null;
+
+/** Wszystkie tony palety naraz — jedno przejście, cache per accent (suwak). */
+export function getPaletteToneColors(accentHex: string): PaletteToneColors {
+  const key = normalizeHex(accentHex);
+  if (paletteColorsCache && paletteColorsCacheKey === key) {
+    return paletteColorsCache;
+  }
+
+  const theme = buildThemeFromAccent(key);
+  const { h, s } = hexToHsl(theme.accent);
+  const sat = clamp(s, 38, 92);
+  const base = Number.isFinite(h) ? h : 271;
+
+  paletteColorsCache = {
+    wire: theme.textMuted,
+    shadow: hslToHex(base, clamp(sat * 0.42, 20, 52), 30),
+    pink: hslToHex((base - 14 + 360) % 360, clamp(sat * 0.86, 68, 96), 60),
+    yellow: hslToHex((base + 46) % 360, clamp(sat * 0.26 + 80, 82, 96), 58),
+    green: hslToHex((base + 108) % 360, clamp(sat * 0.72, 48, 82), 58),
+    blue: hslToHex((base + 198) % 360, clamp(sat * 0.48 + 48, 70, 94), 56),
+    accent: theme.accentStrong,
+  };
+  paletteColorsCacheKey = key;
+  return paletteColorsCache;
+}
+
+/** Kolory kropek palety — odcienie z aktualnego motywu (suwak hue). */
+export function paletteToneColor(tone: PaletteTone, accentHex: string): string {
+  return getPaletteToneColors(accentHex)[tone];
 }
 
 export function buildThemeFromAccent(accentHex: string): ThemeTokens {

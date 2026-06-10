@@ -87,3 +87,12 @@
     0 0 34px rgba(255, 255, 255, 0.32),
     0 0 48px color-mix(in srgb, var(--accent, #a78bfa) 14%, rgba(255, 255, 255, 0.22));
 }
+
+.dotDiamond {
+  background: #ffffff !important;
+  box-shadow:
+    0 0 8px rgba(255, 255, 255, 1),
+    0 0 18px rgba(255, 255, 255, 0.75),
+    0 0 30px color-mix(in srgb, #e9d5ff 36%, rgba(255, 255, 255, 0.4)),
+    0 0 44px color-mix(in srgb, var(--accent, #a78bfa) 18%, transparent);
+}

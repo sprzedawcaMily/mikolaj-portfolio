@@ -9,6 +9,9 @@
 .inner {
   max-width: 1100px;
   margin: 0 auto;
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
 }
 
 .panel {

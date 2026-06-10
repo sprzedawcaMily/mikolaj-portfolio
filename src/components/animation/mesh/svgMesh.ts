@@ -1,3 +1,5 @@
+import type { PaletteTone } from '@/components/animation/mesh/parsePaletteMesh';
+
 export type MeshGroup = 'body' | 'light';
 
 export interface MeshNode {
@@ -7,6 +9,7 @@ export interface MeshNode {
   r: number;
   group: MeshGroup;
   phase: number;
+  paletteTone?: PaletteTone;
 }
 
 export interface MeshEdge {

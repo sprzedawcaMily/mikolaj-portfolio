@@ -14,6 +14,7 @@ import {
   eyeBlinkTransform,
   eyeFirstRevealLayerOpacity,
   eyeIrisBlinkOpacity,
+  eyeIrisWrapRevealOpacity,
   eyePupilBlinkOpacity,
 } from './eyeBlink';
 import styles from './KamochiEye.module.css';
@@ -78,6 +79,11 @@ function aimOffset(
   };
 }
 
+function easeIrisBuild(t: number) {
+  const u = Math.max(0, Math.min(1, t));
+  return u * u * (3 - 2 * u);
+}
+
 function redZoneClipTransform(irisOnly: boolean, blinkCover = 0) {
   const base = irisOnly ? RED_ZONE_CLIP_SCALE.overlay : RED_ZONE_CLIP_SCALE.full;
   const expand = eyeBlinkClipExpand(blinkCover);
@@ -109,7 +115,7 @@ export function KamochiEye({
   const [data, setData] = useState<KamochiEyeData | null>(null);
   const [inView, setInView] = useState(false);
   const { zone: activeMeshZone } = useMeshZone();
-  const { morphSettled, eyeIrisUnlocked, eyeFrame } = useMeshMotionState();
+  const { morphSettled, morphBuildT, eyeFrame } = useMeshMotionState();
   const [reducedMotion, setReducedMotion] = useState(false);
   const zoneActive = meshZone == null || activeMeshZone === meshZone;
   const visible = inView && zoneActive;
@@ -190,13 +196,14 @@ export function KamochiEye({
     return () => cancelAnimationFrame(frame);
   }, [data]);
 
+  const irisBuild = morphSettled ? 1 : morphBuildT;
   const irisReveal = irisOnly
     ? reducedMotion
-      ? morphSettled
+      ? irisBuild >= 0.98
         ? 1
-        : 0
-      : eyeIrisUnlocked
-        ? 1
+        : irisBuild * 0.85
+      : irisBuild > 0.06
+        ? eyeIrisWrapRevealOpacity(blinkCover) * easeIrisBuild(irisBuild)
         : 0
     : 1;
   const wrapClass = [
@@ -207,14 +214,16 @@ export function KamochiEye({
   ]
     .filter(Boolean)
     .join(' ');
-  const meshAttach = irisOnly && eyeFrame.ready
+  const meshSynced = irisOnly && irisBuild >= 0.94 && eyeFrame.ready;
+  const meshAttach = meshSynced
     ? `translate(${eyeFrame.ox}px, ${eyeFrame.oy}px) scale(${eyeFrame.scaleX}, ${eyeFrame.scaleY})`
     : '';
+  const eyeOrigin = `${(EYE_CENTER.x / EYE_VIEWBOX.w) * 100}% ${(EYE_CENTER.y / EYE_VIEWBOX.h) * 100}%`;
   const wrapStyle = irisOnly
     ? {
         opacity: visible ? irisReveal : 0,
         transform: meshAttach || undefined,
-        transformOrigin: 'center center',
+        transformOrigin: eyeOrigin,
       }
     : undefined;
 
@@ -225,17 +234,15 @@ export function KamochiEye({
   const redZoneClipId = `kamochi-eye-zone-${uid}`;
   const greenClipId = `kamochi-eye-green-${uid}`;
   const redClip = data.redZonePath ? `url(#${redZoneClipId})` : undefined;
-  const meshSynced = irisOnly && eyeFrame.ready;
-  const clipPathTransform = meshSynced
-    ? redZoneClipTransform(irisOnly, 0)
-    : redZoneClipTransform(irisOnly, blinkCover);
+  const clipPathTransform = redZoneClipTransform(irisOnly, blinkCover);
   const motionTransform = `translate(${motion.x} ${motion.y})`;
   const blinkSquash = meshSynced ? '' : eyeBlinkTransform(blinkCover);
   const irisTransform = `${motionTransform}${blinkSquash ? ` ${blinkSquash}` : ''}`.trim();
   const pupilTransform = irisTransform;
-  const firstRevealOpacity = eyeFirstRevealLayerOpacity();
-  const irisRingOpacity = firstRevealOpacity ?? eyeIrisBlinkOpacity(blinkCover);
-  const pupilOpacity = firstRevealOpacity ?? eyePupilBlinkOpacity(blinkCover);
+  const firstRevealIris = eyeFirstRevealLayerOpacity(blinkCover, 'iris');
+  const firstRevealPupil = eyeFirstRevealLayerOpacity(blinkCover, 'pupil');
+  const irisRingOpacity = firstRevealIris ?? eyeIrisBlinkOpacity(blinkCover);
+  const pupilOpacity = firstRevealPupil ?? eyePupilBlinkOpacity(blinkCover);
   const whiteFrame = irisOnly ? '' : data.white;
 
   return (

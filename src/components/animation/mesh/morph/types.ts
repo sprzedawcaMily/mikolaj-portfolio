@@ -5,7 +5,11 @@ import type { SvgMesh } from '@/components/animation/mesh/svgMesh';
 export type NormPt = { nx: number; ny: number };
 export type PixelPt = { x: number; y: number };
 
-export type MorphEdge = { a: number; b: number; group: 'face' | 'hair' | 'reflector' };
+export type MorphEdge = {
+  a: number;
+  b: number;
+  group: 'face' | 'hair' | 'reflector' | 'palette';
+};
 
 export type MeshBundle = {
   faceMesh: FaceMesh;

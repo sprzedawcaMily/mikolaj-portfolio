@@ -1,10 +1,11 @@
 import { FlyingMeshDots } from '@/components/animation/FlyingMeshDots';
 import { InteractiveDotField } from '@/components/animation/InteractiveDotField';
+import { MeshPerfMonitor } from '@/components/debug/MeshPerfMonitor';
 import { SiteHeader } from '@/components/layout/SiteHeader';
 import { MeshZoneProvider } from '@/context/MeshZoneContext';
 import {
   AboutSection,
-  ContactSection,
+  ContactZone,
   ExperienceSection,
   Hero,
   HuePickerSection,
@@ -18,6 +19,7 @@ import styles from './App.module.css';
 export default function App() {
   return (
     <ThemeProvider>
+      <MeshPerfMonitor />
       <InteractiveDotField />
       <MeshZoneProvider>
         <div className={styles.pageShell}>
@@ -31,7 +33,7 @@ export default function App() {
               <ProjectsSection />
               <ExperienceSection />
               <SkillsSection />
-              <ContactSection />
+              <ContactZone />
             </main>
             <SiteFooter />
           </div>

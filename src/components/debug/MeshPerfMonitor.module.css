@@ -1,0 +1,101 @@
+.panel {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 9999;
+  min-width: 220px;
+  padding: 10px 12px 8px;
+  font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-main);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 42%, transparent);
+  backdrop-filter: blur(10px);
+  border-radius: var(--radius-md, 14px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.title {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+}
+
+.grid dt {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.grid dd {
+  margin: 0;
+  text-align: right;
+}
+
+.val {
+  font-variant-numeric: tabular-nums;
+}
+
+.ok {
+  color: #8fd9a8;
+}
+
+.warn {
+  color: #e8c468;
+}
+
+.bad {
+  color: #e88f8f;
+}
+
+.spikeTitle {
+  margin: 10px 0 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.spikeList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 88px;
+  overflow: auto;
+}
+
+.spikeList li {
+  font-size: 9px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.spikeIdle {
+  color: var(--text-muted);
+}
+
+.spikeWarn {
+  color: #e8c468;
+}
+
+.spikeBad {
+  color: #e88f8f;
+}
+
+.hint {
+  margin: 8px 0 0;
+  font-size: 9px;
+  color: color-mix(in srgb, var(--text-muted) 80%, transparent);
+}

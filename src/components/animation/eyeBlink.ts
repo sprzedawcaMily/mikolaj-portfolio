@@ -53,10 +53,30 @@ export function stepEyeIrisReveal(morphSettled: boolean, now: number) {
   }
 }
 
-/** Podczas pierwszego revealu — pojawia się przy zamknięciu, zostaje widoczna aż oko się otworzy. */
-export function eyeFirstRevealLayerOpacity(): number | null {
-  if (!irisRevealUnlocked || irisRevealOpened) return null;
+/** Szczyt mrugnięcia — dopiero przy pełnym „zwężeniu” białego pola. */
+const IRIS_REVEAL_PEAK = 0.45;
+const PUPIL_REVEAL_PEAK = 0.5;
+
+function firstRevealVisible(cover: number, peak: number): number {
+  if (irisRevealOpened) return 1;
+  if (!blinkActive || blinkAt <= 0) return 0;
+  if (!irisRevealUnlocked && cover < peak) return 0;
   return 1;
+}
+
+/** Warstwa SVG — ukryta aż powieka idealnie zamknie białe pole. */
+export function eyeIrisWrapRevealOpacity(cover: number): number {
+  return firstRevealVisible(cover, IRIS_REVEAL_PEAK);
+}
+
+/** Tęczówka / źrenica — generowane dopiero w szczycie mrugnięcia. */
+export function eyeFirstRevealLayerOpacity(
+  cover: number,
+  layer: 'iris' | 'pupil',
+): number | null {
+  if (irisRevealOpened) return null;
+  const peak = layer === 'iris' ? IRIS_REVEAL_PEAK : PUPIL_REVEAL_PEAK;
+  return firstRevealVisible(cover, peak);
 }
 
 export function stepEyeBlink(now: number) {

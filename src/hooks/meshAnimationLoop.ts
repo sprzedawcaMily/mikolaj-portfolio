@@ -3,11 +3,14 @@
  * i pozwala współdzielić cache layoutu (getBoundingClientRect) w tej samej klatce.
  */
 
+import { recordMeshFrameDuration } from '@/hooks/meshPerfStats';
+
 export type MeshFrameCallback = (ts: number, dt: number) => void;
 
 let frameId = 0;
 let rafId = 0;
 let lastTs = 0;
+let lastRafTs = 0;
 let running = false;
 const subscribers = new Set<MeshFrameCallback>();
 
@@ -33,9 +36,13 @@ export function subscribeMeshFrame(fn: MeshFrameCallback): () => void {
 
 function loop(ts: number) {
   if (!running) return;
+  const frameStart = performance.now();
+  const frameGapMs = lastRafTs > 0 ? ts - lastRafTs : 0;
+  lastRafTs = ts;
   const dt = Math.min((ts - lastTs) / 1000, 0.05);
   lastTs = ts;
   frameId += 1;
   for (const fn of subscribers) fn(ts, dt);
+  recordMeshFrameDuration(performance.now() - frameStart, frameGapMs);
   rafId = requestAnimationFrame(loop);
 }

@@ -1,3 +1,5 @@
+import type { PaletteTone } from '@/components/animation/mesh/parsePaletteMesh';
+import { layoutMeshOnCanvas } from '@/components/animation/mesh/svgMesh';
 import type { MeshZone } from '@/hooks/meshScrollEngine';
 import {
   buildPrimaryMorphMaps,
@@ -36,6 +38,27 @@ export interface ZoneLayout {
   splits: Map<number, NormGoal[]>;
   /** Członek grupy → lider (kilka kropek łączy się w jedną). */
   mergeMembers: Map<number, number>;
+  /** hostId → ton kropki palety (kolory z motywu). */
+  paletteTones?: Map<number, PaletteTone>;
+  /** Pełna warstwa kropek palety (wire + kolory) w pozycjach SVG. */
+  paletteOverlay?: PaletteOverlay;
+  /** hostId → dokładna pozycja plamy farby w układzie stage (px). */
+  paletteToneAnchors?: Map<number, Point2>;
+}
+
+export interface PaletteSplat {
+  id: string;
+  nodeId: number;
+  x: number;
+  y: number;
+  tone: PaletteTone;
+  r: number;
+}
+
+export interface PaletteOverlay {
+  dots: PaletteSplat[];
+  edges: { a: number; b: number }[];
+  dotR: number;
 }
 
 export interface DotAtlas {
@@ -44,18 +67,11 @@ export interface DotAtlas {
   cluster: Point2;
 }
 
-const ARROW_LAYOUT_FIT = 0.72;
+const PALETTE_LAYOUT_FIT = 1.72;
+const PALETTE_LAYOUT_OFFSET_X = 0.14;
+/** Maks. odległość (px) hosta od kolorowej kropki SVG, żeby dostać ton. */
+const PALETTE_EXACT_SNAP_PX = 12;
 export const PALETTE_ARROW_BASE_GAP = 38;
-/** Odstęp czubka od środka kółka pickera (0 = w środek). */
-const ARROW_DOT_GAP = 0;
-const ARROW_MAX_LEAN_RAD = (76 * Math.PI) / 180;
-/** Domykanie celu po obrocie — na skrajach głównie większy kąt, mało przesuwu w bok. */
-const ARROW_AIM_BLEND_MIN_X = 0.22;
-const ARROW_AIM_BLEND_MAX_X = 0.36;
-const ARROW_AIM_BLEND_MIN_Y = 0.12;
-const ARROW_AIM_BLEND_MAX_Y = 0.42;
-const ARROW_AIM_LATERAL_FULL_BLEND_PX = 120;
-const ARROW_AIM_VERTICAL_FULL_BLEND_PX = 80;
 
 const palettePaddedLayoutCache = new Map<string, ZoneLayout>();
 
@@ -76,7 +92,125 @@ function cloneZoneLayout(src: ZoneLayout): ZoneLayout {
     mappedIds: new Set(src.mappedIds),
     splits: new Map(src.splits),
     mergeMembers: new Map(src.mergeMembers),
+    paletteTones: src.paletteTones ? new Map(src.paletteTones) : undefined,
+    paletteOverlay: src.paletteOverlay
+      ? {
+          dotR: src.paletteOverlay.dotR,
+          edges: src.paletteOverlay.edges.map((e) => ({ ...e })),
+          dots: src.paletteOverlay.dots.map((splat) => ({ ...splat })),
+        }
+      : undefined,
+    paletteToneAnchors: src.paletteToneAnchors
+      ? new Map(src.paletteToneAnchors)
+      : undefined,
   };
+}
+
+function layoutShift(
+  maps: ReturnType<typeof buildPrimaryMorphMaps>,
+  layout: ZoneLayout,
+): Point2 {
+  for (const hostId of maps.mappedPrimary) {
+    const post = layout.positions.get(hostId);
+    const pre = maps.targets.get(hostId);
+    if (post && pre) {
+      return { x: post.x - pre.x, y: post.y - pre.y };
+    }
+  }
+  return { x: 0, y: 0 };
+}
+
+function paletteToneMarkers(
+  paletteMesh: SvgMesh,
+  canvasW: number,
+  canvasH: number,
+  shift: Point2,
+): { tone: PaletteTone; x: number; y: number }[] {
+  const targetLayout = layoutMeshOnCanvas(paletteMesh, canvasW, canvasH, PALETTE_LAYOUT_FIT);
+  const markers: { tone: PaletteTone; x: number; y: number }[] = [];
+
+  for (const node of paletteMesh.nodes) {
+    if (!node.paletteTone || node.paletteTone === 'wire') continue;
+    markers.push({
+      tone: node.paletteTone,
+      x: targetLayout.offsetX + node.x * targetLayout.scale + shift.x,
+      y: targetLayout.offsetY + node.y * targetLayout.scale + shift.y,
+    });
+  }
+  return markers;
+}
+
+function stagePointForNode(
+  node: { x: number; y: number },
+  shift: Point2,
+  targetLayout: ReturnType<typeof layoutMeshOnCanvas>,
+) {
+  return {
+    x: targetLayout.offsetX + node.x * targetLayout.scale + shift.x,
+    y: targetLayout.offsetY + node.y * targetLayout.scale + shift.y,
+  };
+}
+
+function buildPaletteTonesFromLayout(
+  layout: ZoneLayout,
+  maps: ReturnType<typeof buildPrimaryMorphMaps>,
+  paletteMesh: SvgMesh,
+  canvasW: number,
+  canvasH: number,
+  _overlay?: PaletteOverlay,
+): { tones: Map<number, PaletteTone>; anchors: Map<number, Point2> } {
+  const shift = layoutShift(maps, layout);
+  const targetLayout = layoutMeshOnCanvas(paletteMesh, canvasW, canvasH, PALETTE_LAYOUT_FIT);
+  const markers = paletteToneMarkers(paletteMesh, canvasW, canvasH, shift);
+  const nodeById = new Map(paletteMesh.nodes.map((node) => [node.id, node] as const));
+  const exactSnap = Math.max(8, PALETTE_EXACT_SNAP_PX * maps.targetLayoutScale);
+  const tones = new Map<number, PaletteTone>();
+  const anchors = new Map<number, Point2>();
+
+  const primaryToTarget = new Map<number, number>();
+  for (const [targetId, primaryId] of maps.targetToPrimary) {
+    primaryToTarget.set(primaryId, targetId);
+  }
+
+  for (const hostId of layout.mappedIds) {
+    tones.set(hostId, 'wire');
+  }
+
+  for (const hostId of layout.mappedIds) {
+    const targetId = primaryToTarget.get(hostId);
+    const node = targetId != null ? nodeById.get(targetId) : undefined;
+    if (node?.paletteTone && node.paletteTone !== 'wire') {
+      tones.set(hostId, node.paletteTone);
+      anchors.set(hostId, stagePointForNode(node, shift, targetLayout));
+    }
+  }
+
+  const claimed = new Set<number>();
+  for (const [hostId, tone] of tones) {
+    if (tone !== 'wire') claimed.add(hostId);
+  }
+
+  for (const marker of markers) {
+    let bestHost = -1;
+    let bestDist = exactSnap;
+    for (const hostId of layout.mappedIds) {
+      if (claimed.has(hostId)) continue;
+      const point = layout.positions.get(hostId);
+      if (!point) continue;
+      const dist = Math.hypot(point.x - marker.x, point.y - marker.y);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestHost = hostId;
+      }
+    }
+    if (bestHost >= 0) {
+      tones.set(bestHost, marker.tone);
+      anchors.set(bestHost, { x: marker.x, y: marker.y });
+      claimed.add(bestHost);
+    }
+  }
+
+  return { tones, anchors };
 }
 
 export function faceMeshToSvgMesh(face: FaceMesh): SvgMesh {
@@ -208,17 +342,6 @@ function buildHeroLayout(master: FaceMesh, canvasW: number, canvasH: number): Zo
   };
 }
 
-function rotateAroundPivot(x: number, y: number, pivotX: number, pivotY: number, rad: number) {
-  const dx = x - pivotX;
-  const dy = y - pivotY;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  return {
-    x: pivotX + dx * cos - dy * sin,
-    y: pivotY + dx * sin + dy * cos,
-  };
-}
-
 function layoutCentroid(layout: ZoneLayout) {
   let sumX = 0;
   let sumY = 0;
@@ -238,37 +361,6 @@ function applyToMapped(layout: ZoneLayout, fn: (p: Point2) => Point2) {
     if (!p) continue;
     layout.positions.set(id, fn(p));
   }
-}
-
-function normalizeAngleRad(v: number) {
-  let a = v;
-  while (a > Math.PI) a -= 2 * Math.PI;
-  while (a < -Math.PI) a += 2 * Math.PI;
-  return a;
-}
-
-function arrowTip(layout: ZoneLayout) {
-  let tipX = 0;
-  let tipY = -Infinity;
-  for (const p of layout.positions.values()) {
-    if (p.y > tipY) {
-      tipY = p.y;
-      tipX = p.x;
-    }
-  }
-  return { tipX, tipY };
-}
-
-function arrowRoot(layout: ZoneLayout) {
-  let rootX = 0;
-  let rootY = Infinity;
-  for (const p of layout.positions.values()) {
-    if (p.y < rootY) {
-      rootY = p.y;
-      rootX = p.x;
-    }
-  }
-  return { rootX, rootY };
 }
 
 function fitArrowPadding(
@@ -301,73 +393,47 @@ function fitArrowPadding(
   applyToMapped(layout, (p) => ({ x: p.x + dx, y: p.y + dy }));
 }
 
-function centerArrowHorizontally(layout: ZoneLayout, canvasW: number) {
-  const { x: cx } = layoutCentroid(layout);
-  const dx = canvasW * 0.5 - cx;
-  if (Math.abs(dx) < 0.5) return;
-  applyToMapped(layout, (p) => ({ x: p.x + dx, y: p.y }));
+function fitPaletteCentered(layout: ZoneLayout, canvasW: number, canvasH: number) {
+  fitArrowPadding(layout, canvasW, canvasH);
+  const { x: cx, y: cy } = layoutCentroid(layout);
+  const targetX = canvasW * (0.5 + PALETTE_LAYOUT_OFFSET_X);
+  const targetY = canvasH * 0.5;
+  applyToMapped(layout, (p) => ({
+    x: p.x + (targetX - cx),
+    y: p.y + (targetY - cy),
+  }));
 }
 
-function clampLeanRad(v: number) {
-  return Math.max(-ARROW_MAX_LEAN_RAD, Math.min(ARROW_MAX_LEAN_RAD, v));
-}
-
-function aimMissBlend(missPx: number, min: number, max: number, fullPx: number) {
-  const t = Math.min(1, Math.max(0, missPx / fullPx));
-  return min + (max - min) * t;
-}
-
-function fitArrowAim(
+function buildPaletteOverlay(
+  paletteMesh: SvgMesh,
+  maps: ReturnType<typeof buildPrimaryMorphMaps>,
   layout: ZoneLayout,
   canvasW: number,
-  _canvasH: number,
-  aimPoint: { x: number; y: number; centerX?: number },
-) {
-  const pad = { top: 28, right: 36, bottom: 32, left: 20 };
+  canvasH: number,
+): PaletteOverlay {
+  const shift = layoutShift(maps, layout);
+  const targetLayout = layoutMeshOnCanvas(paletteMesh, canvasW, canvasH, PALETTE_LAYOUT_FIT);
+  const dotR = Math.max(1.4, 4.5 * maps.targetLayoutScale);
+  const dots: PaletteSplat[] = [];
+  const nodeIds = new Set<number>();
 
-  // SVG patrzy w górę (grot = min Y) — obrót 180° żeby celować w dół na picker.
-  let { x: cx, y: cy } = layoutCentroid(layout);
-  applyToMapped(layout, (p) => ({
-    x: cx + (cx - p.x),
-    y: cy + (cy - p.y),
-  }));
-
-  const { rootY } = arrowRoot(layout);
-  const pivotX = canvasW * 0.5;
-  const pivotY = rootY;
-
-  let { tipX, tipY } = arrowTip(layout);
-  const currentAngle = Math.atan2(tipY - pivotY, tipX - pivotX);
-  const targetAngle = Math.atan2(aimPoint.y - pivotY, aimPoint.x - pivotX);
-  const leanRad = clampLeanRad(normalizeAngleRad(targetAngle - currentAngle));
-  applyToMapped(layout, (p) => rotateAroundPivot(p.x, p.y, pivotX, pivotY, leanRad));
-
-  ({ tipX, tipY } = arrowTip(layout));
-  const resX = aimPoint.x - tipX;
-  const resY = aimPoint.y - ARROW_DOT_GAP - tipY;
-  const blendX = aimMissBlend(
-    Math.abs(resX),
-    ARROW_AIM_BLEND_MIN_X,
-    ARROW_AIM_BLEND_MAX_X,
-    ARROW_AIM_LATERAL_FULL_BLEND_PX,
-  );
-  const blendY = aimMissBlend(
-    Math.abs(resY),
-    ARROW_AIM_BLEND_MIN_Y,
-    ARROW_AIM_BLEND_MAX_Y,
-    ARROW_AIM_VERTICAL_FULL_BLEND_PX,
-  );
-  applyToMapped(layout, (p) => ({
-    x: p.x + resX * blendX,
-    y: p.y + resY * blendY,
-  }));
-
-  let minYAfter = Infinity;
-  for (const p of layout.positions.values()) minYAfter = Math.min(minYAfter, p.y);
-  if (minYAfter < pad.top) {
-    const fix = pad.top - minYAfter;
-    applyToMapped(layout, (p) => ({ x: p.x, y: p.y + fix }));
+  for (const node of paletteMesh.nodes) {
+    const x = targetLayout.offsetX + node.x * targetLayout.scale + shift.x;
+    const y = targetLayout.offsetY + node.y * targetLayout.scale + shift.y;
+    nodeIds.add(node.id);
+    dots.push({
+      id: `p:${node.id}`,
+      nodeId: node.id,
+      x,
+      y,
+      tone: node.paletteTone ?? 'wire',
+      r: dotR,
+    });
   }
+
+  const edges = paletteMesh.edges.filter((edge) => nodeIds.has(edge.a) && nodeIds.has(edge.b));
+
+  return { dots, edges, dotR };
 }
 
 function buildPalettePaddedLayout(
@@ -376,19 +442,30 @@ function buildPalettePaddedLayout(
   canvasW: number,
   canvasH: number,
 ): ZoneLayout {
-  const key = `${canvasW}x${canvasH}`;
+  const key = `v11:${canvasW}x${canvasH}`;
   const cached = palettePaddedLayoutCache.get(key);
   if (cached) return cloneZoneLayout(cached);
 
   const maps = buildPrimaryMorphMaps(primary, paletteMesh, canvasW, canvasH, {
-    layoutFit: ARROW_LAYOUT_FIT,
-    targetLayoutFit: ARROW_LAYOUT_FIT,
+    layoutFit: PALETTE_LAYOUT_FIT,
+    targetLayoutFit: PALETTE_LAYOUT_FIT,
     centerRatioY: 0.5,
     targetCenterRatioY: 0.48,
   });
   const layout = layoutFromMorphMaps(maps, canvasW, canvasH);
-  fitArrowPadding(layout, canvasW, canvasH);
-  centerArrowHorizontally(layout, canvasW);
+  fitPaletteCentered(layout, canvasW, canvasH);
+  const overlay = buildPaletteOverlay(paletteMesh, maps, layout, canvasW, canvasH);
+  layout.paletteOverlay = overlay;
+  const paletteToneMaps = buildPaletteTonesFromLayout(
+    layout,
+    maps,
+    paletteMesh,
+    canvasW,
+    canvasH,
+    overlay,
+  );
+  layout.paletteTones = paletteToneMaps.tones;
+  layout.paletteToneAnchors = paletteToneMaps.anchors;
   palettePaddedLayoutCache.set(key, cloneZoneLayout(layout));
   if (palettePaddedLayoutCache.size > 8) palettePaddedLayoutCache.clear();
   return cloneZoneLayout(layout);
@@ -399,16 +476,14 @@ export function buildDotAtlas(
   zoneMeshes: Partial<Record<MeshZone, SvgMesh>>,
   canvasW: number,
   canvasH: number,
-  aimPoint?: { x: number; y: number; centerX?: number } | null,
+  _aimPoint?: { x: number; y: number; centerX?: number } | null,
 ): DotAtlas {
   const primary = faceMeshToSvgMesh(master);
   const zones: Partial<Record<MeshZone, ZoneLayout>> = {};
   zones.hero = buildHeroLayout(master, canvasW, canvasH);
 
   if (zoneMeshes.palette) {
-    const palette = buildPalettePaddedLayout(primary, zoneMeshes.palette, canvasW, canvasH);
-    if (aimPoint) fitArrowAim(palette, canvasW, canvasH, aimPoint);
-    zones.palette = palette;
+    zones.palette = buildPalettePaddedLayout(primary, zoneMeshes.palette, canvasW, canvasH);
   }
 
   if (zoneMeshes.bus) {
@@ -480,6 +555,16 @@ export function buildDotAtlas(
     zones.skillsEye = layoutFromMorphMaps(maps, canvasW, canvasH);
   }
 
+  if (zoneMeshes.contactArrow) {
+    const maps = buildPrimaryMorphMaps(primary, zoneMeshes.contactArrow, canvasW, canvasH, {
+      layoutFit: 1.04,
+      centerRatioY: 0.5,
+      targetLayoutFit: 0.92,
+      targetCenterRatioY: 0.94,
+    });
+    zones.contactArrow = layoutFromMorphMaps(maps, canvasW, canvasH);
+  }
+
   return {
     masterIds: [...master.visibleNodeIds],
     zones,
@@ -489,6 +574,22 @@ export function buildDotAtlas(
 
 export function zoneLayout(atlas: DotAtlas, zone: MeshZone): ZoneLayout | undefined {
   return atlas.zones[zone];
+}
+
+/** Kropki + kreski palety w układzie kotwicy (px względem slotu mesha). */
+export function computePaletteOverlay(
+  faceMesh: FaceMesh,
+  paletteMesh: SvgMesh,
+  canvasW: number,
+  canvasH: number,
+): PaletteOverlay {
+  const layout = buildPalettePaddedLayout(
+    faceMeshToSvgMesh(faceMesh),
+    paletteMesh,
+    canvasW,
+    canvasH,
+  );
+  return layout.paletteOverlay ?? { dots: [], edges: [], dotR: 4.5 };
 }
 
 /** Cele kropek z blendu scrolla — każda leci w swoje miejsce, bez wspólnej fazy morphu. */
@@ -538,5 +639,7 @@ export function blendZoneLayouts(
     mappedIds: new Set(positions.keys()),
     splits: t >= 0.5 ? new Map(to.splits) : new Map(from.splits),
     mergeMembers: t >= 0.5 ? new Map(to.mergeMembers) : new Map(from.mergeMembers),
+    paletteTones: t >= 0.5 ? to.paletteTones : from.paletteTones,
+    paletteOverlay: t >= 0.5 ? to.paletteOverlay : from.paletteOverlay,
   };
 }

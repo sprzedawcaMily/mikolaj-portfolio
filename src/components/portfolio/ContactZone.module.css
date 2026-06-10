@@ -1,0 +1,30 @@
+.zone {
+  position: relative;
+}
+
+.arrowSlot {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  width: min(228px, 52vw);
+  aspect-ratio: 1243 / 2207;
+  left: max(8px, calc(50% - 320px - min(248px, 54vw)));
+  /* Stały offset — bez vh, żeby slot nie „pływał” przy scrollu */
+  bottom: 112px;
+}
+
+@media (min-width: 720px) {
+  .arrowSlot {
+    width: min(252px, 24vw);
+    left: max(16px, calc(50% - 360px - min(272px, 26vw)));
+    bottom: 132px;
+  }
+}
+
+@media (min-width: 1080px) {
+  .arrowSlot {
+    width: 272px;
+    left: calc(50% - 640px);
+    bottom: 148px;
+  }
+}

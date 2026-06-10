@@ -5,17 +5,21 @@ import type { MeshBundle } from '@/components/animation/mesh/morph/types';
 import { useMeshZone } from '@/context/MeshZoneContext';
 import {
   createFlyingPool,
+  prewarmMeshLayouts,
   tickFlyingDots,
   type FacePointer,
 } from '@/components/animation/flyingDotEngine';
 import { HERO_MESH_ANCHOR_ID } from '@/hooks/meshScrollEngine';
 import { currentMeshFrameId, subscribeMeshFrame } from '@/hooks/meshAnimationLoop';
+import { markScrollActivity } from '@/hooks/meshPerfStats';
+import { useMeshMotionState } from '@/hooks/meshMotionState';
 import styles from './FlyingMeshDots.module.css';
 
 const SCROLL_IDLE_MS = 120;
 
 export function FlyingMeshDots() {
-  const { paletteAim } = useMeshZone();
+  const { paletteAim, zone } = useMeshZone();
+  const { morphSettled } = useMeshMotionState();
   const { accent } = useTheme();
   const layerRef = useRef<HTMLDivElement>(null);
   const wireRef = useRef<HTMLCanvasElement>(null);
@@ -33,11 +37,15 @@ export function FlyingMeshDots() {
     screenActive: false,
   });
   const scrollPausedRef = useRef(false);
+  const zoneRef = useRef(zone);
+  const morphSettledRef = useRef(morphSettled);
   const [bundle, setBundle] = useState<MeshBundle | null>(null);
 
   paletteAimRef.current = paletteAim;
   accentRef.current = accent;
   bundleRef.current = bundle;
+  zoneRef.current = zone;
+  morphSettledRef.current = morphSettled;
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +54,29 @@ export function FlyingMeshDots() {
     });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!bundle) return;
+
+    let cancelled = false;
+    const run = () => {
+      if (!cancelled) prewarmMeshLayouts(bundle);
+    };
+
+    if (typeof requestIdleCallback === 'function') {
+      const id = requestIdleCallback(run, { timeout: 2200 });
+      return () => {
+        cancelled = true;
+        cancelIdleCallback(id);
+      };
+    }
+
+    const timer = setTimeout(run, 150);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [bundle]);
 
   useEffect(() => {
     function aimFromEvent(clientX: number, clientY: number): FacePointer {
@@ -114,6 +145,7 @@ export function FlyingMeshDots() {
     let scrollIdleTimer = 0;
 
     function onScroll() {
+      markScrollActivity();
       scrollPausedRef.current = true;
       window.clearTimeout(scrollIdleTimer);
       scrollIdleTimer = window.setTimeout(() => {
@@ -160,10 +192,11 @@ export function FlyingMeshDots() {
         styles.dotSettleBloom,
         styles.dotStar,
         styles.dotReflector,
+        styles.dotDiamond,
         {
           scrolling,
           meshFrameId,
-          wireStride: 1,
+          wireStride: zoneRef.current === 'hero' && !morphSettledRef.current ? 2 : 1,
           wireFrame: meshFrameId,
         },
       );
@@ -177,7 +210,11 @@ export function FlyingMeshDots() {
   }, [bundle]);
 
   return (
-    <div ref={layerRef} className={styles.layer} aria-hidden="true">
+    <div
+      ref={layerRef}
+      className={styles.layer}
+      aria-hidden="true"
+    >
       <canvas ref={wireRef} className={styles.wires} aria-hidden="true" />
     </div>
   );

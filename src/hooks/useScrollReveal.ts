@@ -1,3 +1,4 @@
+import { markScrollReveal } from '@/hooks/meshPerfStats';
 import { useEffect, useRef, useState } from 'react';
 
 export function useScrollReveal<T extends HTMLElement>(
@@ -14,6 +15,13 @@ export function useScrollReveal<T extends HTMLElement>(
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
+          const label =
+            el.getAttribute('data-reveal')
+            || el.getAttribute('aria-label')
+            || el.id
+            || el.className.split(/\s+/).find((c) => c && c !== 'root')?.slice(0, 40)
+            || el.tagName.toLowerCase();
+          markScrollReveal(label);
           setVisible(true);
           observer.disconnect();
         }

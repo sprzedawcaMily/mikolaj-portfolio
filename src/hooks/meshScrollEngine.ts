@@ -12,6 +12,7 @@ export const ARROW_STAGE_EXTRA_W = 96;
 export const MESH_PORTAL_ID = 'mesh-portal-root';
 export const MESH_LAYER_ID = 'mesh-floating-layer';
 export const HERO_MESH_ANCHOR_ID = 'hero-mesh-anchor';
+export const PALETTE_MESH_ANCHOR_ID = 'palette-mesh-anchor';
 export const TRANSITRANK_MESH_ANCHOR_ID = 'transit-rank-mesh-anchor';
 export const FORKFULL_MESH_ANCHOR_ID = 'forkfull-mesh-anchor';
 export const KAMOCHI_MESH_ANCHOR_ID = 'kamochi-mesh-anchor';
@@ -19,8 +20,12 @@ export const LEGITCHECK_MESH_ANCHOR_ID = 'legitcheck-mesh-anchor';
 export const STYLERANK_MESH_ANCHOR_ID = 'stylerank-mesh-anchor';
 export const EXPERIENCE_MESH_ANCHOR_ID = 'experience-mesh-anchor';
 export const SKILLS_MESH_ANCHOR_ID = 'skills-mesh-anchor';
+export const CONTACT_MESH_ANCHOR_ID = 'contact-mesh-anchor';
+export const CONTACT_CTA_ANCHOR_ID = 'contact-cta-anchor';
+export const ARROW_MESH_ASPECT = 1243 / 2207;
 export const TRANSIT_MESH_SLOT_ID = 'transit-rank-mesh-slot';
 export const BUS_DISPLAY_ROTATE_DEG = 15;
+export const PALETTE_DISPLAY_ROTATE_DEG = -15;
 export const FORK_DISPLAY_ROTATE_DEG = 10;
 export const SPRAY_DISPLAY_ROTATE_DEG = 15;
 /** Powiększenie mesha w slocie karty (widelec / sprej). */
@@ -36,29 +41,12 @@ function readRect(id: string) {
   return document.getElementById(id)?.getBoundingClientRect() ?? null;
 }
 
-function paletteStageSize(vw: number, vh: number) {
-  const margin = 16;
-  if (vw < 640) {
-    return {
-      stageW: Math.min(vw - margin * 2, 640),
-      stageH: Math.min(vh * 0.88, 820),
-    };
-  }
-  return {
-    stageW: Math.min(1120 + ARROW_STAGE_EXTRA_W, vw - margin * 2),
-    stageH: Math.min(960, vh * 0.9),
-  };
-}
-
 export function segmentMid(zone: MeshZone): number | null {
   switch (zone) {
     case 'hero':
       return readDocMid(HERO_MESH_ANCHOR_ID);
-    case 'palette': {
-      const blend = heroPaletteTransitionY();
-      if (blend != null) return blend;
+    case 'palette':
       return readDocMid('studio-palety');
-    }
     case 'bus':
       return readDocMid(TRANSITRANK_MESH_ANCHOR_ID);
     case 'fork':
@@ -73,6 +61,8 @@ export function segmentMid(zone: MeshZone): number | null {
       return readDocMid(EXPERIENCE_MESH_ANCHOR_ID);
     case 'skillsEye':
       return readDocMid(SKILLS_MESH_ANCHOR_ID);
+    case 'contactArrow':
+      return readDocMid(CONTACT_MESH_ANCHOR_ID);
   }
 }
 
@@ -110,38 +100,35 @@ function resolvePostProjectsZone(probeY: number): MeshZone {
     return resolveCardZone(probeY);
   }
 
+  const contactTop = readDocTop('kontakt');
+  if (contactTop != null && probeY >= contactTop + 40) {
+    return 'contactArrow';
+  }
+
   if (experienceMid != null && skillsMid != null) {
     const boundary = experienceMid + (skillsMid - experienceMid) * 0.48;
     if (probeY >= boundary) return 'skillsEye';
     return 'careerEye';
   }
 
-  if (skillsMid != null && probeY >= skillsMid - 120) return 'skillsEye';
-  if (experienceMid != null && probeY >= experienceMid - 120) return 'careerEye';
+  if (skillsMid != null && probeY >= skillsMid + 32) return 'skillsEye';
+  if (experienceMid != null && probeY >= experienceMid + 48) return 'careerEye';
   return resolveCardZone(probeY);
-}
-
-function heroPaletteTransitionY(): number | null {
-  const heroMid = readDocMid(HERO_MESH_ANCHOR_ID);
-  const paletteTop = readDocTop('studio-palety');
-  if (heroMid == null || paletteTop == null) return null;
-  return heroMid + (paletteTop - heroMid) * HERO_PALETTE_TRANSITION_RATIO;
 }
 
 /** Scroll wybiera segment — nie procent drogi, tylko strefa viewportu. */
 function resolveSegmentZone(probeY: number): MeshZone {
   const paletteTop = readDocTop('studio-palety');
   const projectsTop = readDocTop('projekty');
-  const heroPaletteY = heroPaletteTransitionY();
 
-  if (heroPaletteY != null) {
-    if (probeY < heroPaletteY) return 'hero';
-  } else if (paletteTop == null || probeY < paletteTop - 80) {
+  const paletteAnchor = readRect(PALETTE_MESH_ANCHOR_ID);
+
+  // Twarz w hero — paleta dopiero w sekcji Studio palety (nie w „O mnie”).
+  if (paletteTop == null || !paletteAnchor || probeY < paletteTop - 96) {
     return 'hero';
   }
   if (projectsTop != null && probeY >= projectsTop + 120) return resolvePostProjectsZone(probeY);
 
-  // Szybki scroll w dół: nie zatrzymuj morphu na ogromnej palecie strzałki.
   const paletteMid = readDocMid('studio-palety');
   if (paletteMid != null && probeY > paletteMid + 120) return resolvePostProjectsZone(probeY);
 
@@ -151,6 +138,17 @@ function resolveSegmentZone(probeY: number): MeshZone {
 /** Dyskretna strefa z histerezą — scroll wybiera cel, nie % morphu. */
 export function resolveActiveMeshZone(vh = window.innerHeight): MeshZone {
   return resolveActiveZoneWithHysteresis(vh);
+}
+
+/** Morph oka startuje dopiero gdy slot jest realnie w viewport. */
+export function isEyeAnchorInView(zone: MeshZone, vh = window.innerHeight): boolean {
+  if (zone !== 'careerEye' && zone !== 'skillsEye') return true;
+  const id = zone === 'careerEye' ? EXPERIENCE_MESH_ANCHOR_ID : SKILLS_MESH_ANCHOR_ID;
+  const el = document.getElementById(id);
+  if (!el) return true;
+  const rect = el.getBoundingClientRect();
+  const visible = Math.min(rect.bottom, vh) - Math.max(rect.top, 0);
+  return visible >= Math.min(rect.height * 0.3, vh * 0.24);
 }
 
 /** Po zoomie / resize — strefa od nowa ze scrolla (bez zaciętej histerezy). */
@@ -265,7 +263,8 @@ export type MeshZone =
   | 'loupe'
   | 'ring'
   | 'careerEye'
-  | 'skillsEye';
+  | 'skillsEye'
+  | 'contactArrow';
 
 export const ZONE_ORDER: MeshZone[] = [
   'hero',
@@ -277,6 +276,7 @@ export const ZONE_ORDER: MeshZone[] = [
   'ring',
   'careerEye',
   'skillsEye',
+  'contactArrow',
 ];
 
 export function zoneIndex(zone: MeshZone) {
@@ -285,9 +285,6 @@ export function zoneIndex(zone: MeshZone) {
 
 const ZONE_HYSTERESIS_PX = 220;
 const VIEW_PROBE_RATIO = 0.44;
-/** 0 = przy twarzy, 1 = sekcja palety — niżej = morph twarz→strzałka wcześniej (wyżej na stronie). */
-const HERO_PALETTE_TRANSITION_RATIO = 0.38;
-
 let committedZone: MeshZone = 'hero';
 
 function readDocMid(id: string) {
@@ -494,47 +491,42 @@ export function targetsForZone(zone: MeshZone): ScrollMorphTargets {
         careerEyeMorph: on,
         skillsEyeMorph: on,
       };
+    case 'contactArrow':
+      return {
+        morph: on,
+        busMorph: on,
+        forkMorph: on,
+        sprayMorph: on,
+        loupeMorph: on,
+        ringMorph: on,
+        careerEyeMorph: on,
+        skillsEyeMorph: on,
+      };
   }
 }
 
-function computePalettePin(vw: number, vh: number) {
-  const section = document.getElementById('studio-palety');
-  if (!section) return null;
+function computePalettePin(_vw: number, _vh: number) {
+  const anchorRect = readRect(PALETTE_MESH_ANCHOR_ID);
+  if (!anchorRect || anchorRect.width < 24 || anchorRect.height < 24) return null;
 
-  const sectionRect = section.getBoundingClientRect();
+  const stageW = anchorRect.width;
+  const stageH = anchorRect.height;
+  const left = anchorRect.left;
+  const top = anchorRect.top;
+
   const thumb = document.getElementById('palette-color-thumb');
   const track = document.getElementById('palette-color-track');
-  const { stageW, stageH } = paletteStageSize(vw, vh);
-  const margin = 8;
-  const sectionCenterX = sectionRect.left + sectionRect.width / 2;
-
-  const trackRect = track?.getBoundingClientRect();
   const thumbRect = thumb?.getBoundingClientRect();
-  const anchorBottom =
-    (trackRect?.top ?? thumbRect?.bottom ?? trackRect?.bottom ?? sectionRect.bottom) +
-    CANVAS_BOTTOM_PAD;
+  const trackRect = track?.getBoundingClientRect();
 
-  let top = anchorBottom - stageH - ARROW_PIN_LIFT_PX;
-  const thumbCenterX = thumbRect
-    ? thumbRect.left + thumbRect.width / 2
-    : trackRect
-      ? trackRect.left + trackRect.width * 0.5
-      : sectionCenterX;
-
-  let left = sectionCenterX - stageW * 0.5;
-  left = Math.max(margin, Math.min(left, vw - stageW - margin));
-
-  let aimViewportX = thumbCenterX;
-  let aimViewportY = (trackRect?.top ?? sectionRect.bottom - 80) - AIM_GAP_PX;
-  if (thumbRect) aimViewportY = thumbRect.top + thumbRect.height / 2;
-  else if (trackRect) aimViewportY = trackRect.top + trackRect.height / 2;
-
-  let aimX = aimViewportX - left;
-  let aimY = aimViewportY - top;
-
-  if (aimY > stageH - 20) {
-    top -= aimY - (stageH - 20);
-    aimY = stageH - 20;
+  let aimX = stageW * 0.5;
+  let aimY = stageH * 0.72;
+  if (thumbRect) {
+    aimX = thumbRect.left + thumbRect.width * 0.5 - left;
+    aimY = thumbRect.top + thumbRect.height * 0.5 - top;
+  } else if (trackRect) {
+    aimX = trackRect.left + trackRect.width * 0.5 - left;
+    aimY = trackRect.top + trackRect.height * 0.5 - top;
   }
 
   return {
@@ -543,8 +535,8 @@ function computePalettePin(vw: number, vh: number) {
       top,
       stageW,
       stageH,
-      rotateDeg: 0,
-      originStr: '',
+      rotateDeg: PALETTE_DISPLAY_ROTATE_DEG,
+      originStr: '50% 50%',
     }),
     aim: {
       x: aimX,
@@ -636,6 +628,28 @@ function projectPinFromAnchor(
   return pinInMeshSlot(anchorRect, stageW, stageH, rotate, origin);
 }
 
+/** Strzałka kontaktu — obrót z geometrii dokumentu (stabilny przy scrollu). */
+function arrowPinFromSlot(slotRect: DOMRect, ctaRect: DOMRect | null): MeshPinState {
+  const stageW = Math.max(200, slotRect.width);
+  const stageH = stageW / ARROW_MESH_ASPECT;
+  const pinLeft = slotRect.left + (slotRect.width - stageW) * 0.5;
+  const pinTop = slotRect.top + (slotRect.height - stageH) * 0.5;
+
+  let rotateDeg = 90;
+  if (ctaRect) {
+    const sx = window.scrollX;
+    const sy = window.scrollY;
+    const cx = pinLeft + stageW * 0.5 + sx;
+    const cy = pinTop + stageH * 0.5 + sy;
+    const tx = ctaRect.left + ctaRect.width * 0.46 + sx;
+    const ty = ctaRect.top + ctaRect.height * 0.52 + sy;
+    const aimRad = Math.atan2(ty - cy, tx - cx);
+    rotateDeg = Math.round((((aimRad * 180) / Math.PI + 90) * 2)) / 2;
+  }
+
+  return pinInMeshSlot(slotRect, stageW, stageH, rotateDeg, '50% 50%');
+}
+
 function eyePinFromAnchor(
   anchorRect: DOMRect,
   _vw: number,
@@ -667,6 +681,7 @@ export type ZonePins = {
   ring: MeshPinState | null;
   careerEye: MeshPinState | null;
   skillsEye: MeshPinState | null;
+  contactArrow: MeshPinState | null;
   paletteAim: ScrollAimPoint | null;
 };
 
@@ -696,6 +711,8 @@ function computeAllZonePinsUncached(): ZonePins | null {
   const ringRect = readRect(STYLERANK_MESH_ANCHOR_ID);
   const careerRect = readRect(EXPERIENCE_MESH_ANCHOR_ID);
   const skillsRect = readRect(SKILLS_MESH_ANCHOR_ID);
+  const contactRect = readRect(CONTACT_MESH_ANCHOR_ID);
+  const ctaRect = readRect(CONTACT_CTA_ANCHOR_ID);
   const transitPin = transitRect ? projectPinFromAnchor(transitRect, vw, vh, 'transit') : null;
   const forkPin = forkRect ? projectPinFromAnchor(forkRect, vw, vh, 'fork') : null;
   const sprayPin = sprayRect ? projectPinFromAnchor(sprayRect, vw, vh, 'spray') : null;
@@ -703,6 +720,7 @@ function computeAllZonePinsUncached(): ZonePins | null {
   const ringPin = ringRect ? projectPinFromAnchor(ringRect, vw, vh, 'ring') : null;
   const careerPin = careerRect ? eyePinFromAnchor(careerRect, vw, vh, false) : null;
   const skillsPin = skillsRect ? eyePinFromAnchor(skillsRect, vw, vh, true) : null;
+  const contactPin = contactRect ? arrowPinFromSlot(contactRect, ctaRect) : null;
 
   const pins = {
     hero: heroPin,
@@ -714,6 +732,7 @@ function computeAllZonePinsUncached(): ZonePins | null {
     ring: ringPin,
     careerEye: careerPin,
     skillsEye: skillsPin,
+    contactArrow: contactPin,
     paletteAim: paletteData?.aim ?? null,
   };
 
@@ -726,6 +745,7 @@ function computeAllZonePinsUncached(): ZonePins | null {
     pins.ring,
     pins.careerEye,
     pins.skillsEye,
+    pins.contactArrow,
   ]) {
     if (pin) syncPinViewport(pin);
   }
@@ -769,6 +789,8 @@ export function pinForZonePins(pins: ZonePins, zone: MeshZone): MeshPinState {
       return pins.careerEye ?? pins.ring ?? pins.hero;
     case 'skillsEye':
       return pins.skillsEye ?? pins.careerEye ?? pins.ring ?? pins.hero;
+    case 'contactArrow':
+      return pins.contactArrow ?? pins.skillsEye ?? pins.careerEye ?? pins.hero;
   }
 }
 

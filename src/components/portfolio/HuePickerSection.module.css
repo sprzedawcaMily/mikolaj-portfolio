@@ -10,16 +10,22 @@
 
 }
 
-.meshSlot {
+.meshWrap {
   position: absolute;
-  left: 50%;
-  bottom: 72px;
-  width: min(1120px, 96vw);
-  height: min(720px, 72vh);
+  left: 66%;
+  top: 0;
+  bottom: 0;
+  width: min(1400px, 112vw);
   transform: translateX(-50%);
   pointer-events: none;
-  z-index: 1;
+  z-index: 0;
   overflow: visible;
+}
+
+.meshSlot {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
 
@@ -34,6 +40,8 @@
 
   z-index: 2;
 
+  isolation: isolate;
+
 }
 
 
@@ -42,7 +50,7 @@
 
   position: relative;
 
-  z-index: 3;
+  z-index: 5;
 
   padding: 18px 20px 22px;
 

@@ -1,6 +1,7 @@
 import { DotReveal } from '@/components/animation/DotReveal';
 import { Button, Card, SectionHeading } from '@/components/emds';
 import { profile } from '@/data/profile';
+import { CONTACT_CTA_ANCHOR_ID } from '@/hooks/meshScrollEngine';
 import styles from './ContactSection.module.css';
 
 export function ContactSection() {
@@ -34,6 +35,7 @@ export function ContactSection() {
             </div>
             <div className={styles.actions}>
               <Button
+                id={CONTACT_CTA_ANCHOR_ID}
                 variant="primary"
                 onClick={() => window.open(`mailto:${profile.email}`, '_self')}
               >

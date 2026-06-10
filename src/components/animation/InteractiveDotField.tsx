@@ -1,3 +1,4 @@
+import { markScrollActivity } from '@/hooks/meshPerfStats';
 import { useEffect, useRef } from 'react';
 import styles from './InteractiveDotField.module.css';
 
@@ -171,6 +172,7 @@ export function InteractiveDotField() {
     }
 
     function onScroll() {
+      markScrollActivity();
       scrollPaused = true;
       window.clearTimeout(scrollIdleTimer);
       scrollIdleTimer = window.setTimeout(() => {
