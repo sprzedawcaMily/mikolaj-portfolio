@@ -1,6 +1,9 @@
 import { DotReveal } from '@/components/animation/DotReveal';
+import { KamochiEye } from '@/components/animation/KamochiEye';
 import { Card, MetaLabel, SectionHeading } from '@/components/emds';
 import { skillGroups } from '@/data/skills';
+import { SKILLS_MESH_ANCHOR_ID } from '@/hooks/meshScrollEngine';
+import meshStyles from './sectionMeshLayout.module.css';
 import styles from './SkillsSection.module.css';
 
 export function SkillsSection() {
@@ -8,26 +11,43 @@ export function SkillsSection() {
     <section className={styles.section} id="umiejetnosci">
       <div className={styles.inner}>
         <DotReveal>
-          <SectionHeading
-            label="Umiejętności"
-            title="Stack technologiczny"
-            subtitle="Bun, React Native, Kubernetes, Gemini i Puppeteer — stack powtarzalny w moich produktach."
-          />
+          <div className={`${meshStyles.wrap} ${meshStyles.wrapEyeLeft}`}>
+            <div
+              id={SKILLS_MESH_ANCHOR_ID}
+              className={meshStyles.meshSlot}
+              aria-hidden="true"
+            >
+              <KamochiEye
+                anchorId={SKILLS_MESH_ANCHOR_ID}
+                className={meshStyles.eye}
+                mirrored
+                irisOnly
+                meshZone="skillsEye"
+              />
+            </div>
+            <div className={meshStyles.content}>
+              <SectionHeading
+                label="Umiejętności"
+                title="Stack technologiczny"
+                subtitle="Bun, React Native, Kubernetes, Gemini i Puppeteer — stack powtarzalny w moich produktach."
+              />
+              <div className={styles.grid}>
+                {skillGroups.map((group, i) => (
+                  <DotReveal key={group.id} delay={i * 0.06}>
+                    <Card>
+                      <MetaLabel>{group.label}</MetaLabel>
+                      <ul className={styles.list}>
+                        {group.items.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </Card>
+                  </DotReveal>
+                ))}
+              </div>
+            </div>
+          </div>
         </DotReveal>
-        <div className={styles.grid}>
-          {skillGroups.map((group, i) => (
-            <DotReveal key={group.id} delay={i * 0.06}>
-              <Card>
-                <MetaLabel>{group.label}</MetaLabel>
-                <ul className={styles.list}>
-                  {group.items.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </Card>
-            </DotReveal>
-          ))}
-        </div>
       </div>
     </section>
   );

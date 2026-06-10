@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion';
-import type { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
 import styles from './DotReveal.module.css';
 
@@ -31,13 +31,14 @@ const VISIBLE = {
 export function DotReveal({ children, className = '', delay = 0 }: DotRevealProps) {
   const reduceMotion = useReducedMotion();
   const { ref, visible } = useScrollReveal<HTMLDivElement>(REVEAL_THRESHOLD, REVEAL_ROOT_MARGIN);
+  const show = visible || reduceMotion;
 
   return (
     <div ref={ref} className={`${styles.root} ${className}`.trim()}>
       <motion.div
         className={styles.content}
         initial={reduceMotion ? false : HIDDEN}
-        animate={visible || reduceMotion ? VISIBLE : HIDDEN}
+        animate={show ? VISIBLE : HIDDEN}
         transition={{
           duration: reduceMotion ? 0.01 : ENTER_DURATION_S,
           delay: reduceMotion ? 0 : delay,

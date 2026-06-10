@@ -1,0 +1,77 @@
+.wrap {
+  display: grid;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(16px, 3vw, 32px);
+  width: 100%;
+  max-width: min(1080px, 100%);
+  margin: 0 auto;
+  overflow: visible;
+}
+
+.wrapEyeRight {
+  grid-template-columns: minmax(0, 640px) min(380px, 34vw);
+}
+
+.wrapEyeLeft {
+  grid-template-columns: min(380px, 34vw) minmax(0, 640px);
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.wrapEyeRight .content {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.wrapEyeRight .meshSlot {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.wrapEyeLeft .meshSlot {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.wrapEyeLeft .content {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.meshSlot {
+  position: relative;
+  width: 100%;
+  min-height: min(280px, 42vw);
+  aspect-ratio: 1408 / 867;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.eye {
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 960px) {
+  .wrapEyeRight,
+  .wrapEyeLeft {
+    grid-template-columns: 1fr;
+    max-width: 640px;
+  }
+
+  .meshSlot,
+  .content {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+  }
+
+  .meshSlot {
+    width: min(320px, 88vw);
+    margin-inline: auto;
+  }
+}

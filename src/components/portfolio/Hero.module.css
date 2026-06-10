@@ -35,6 +35,18 @@
   pointer-events: none;
 }
 
+.meshFloating {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  margin: 0;
+  pointer-events: none;
+  overflow: visible;
+  visibility: hidden;
+  will-change: transform, top, left;
+}
+
 .meshBackground {
   position: relative;
   z-index: 1;
@@ -279,7 +291,7 @@ button.ctaSecondary {
     top: 6%;
     left: 50%;
     right: auto;
-    width: min(560px, 104vw);
+    width: min(560px, 100%);
     height: min(680px, 72vh);
     max-width: none;
     transform: translateX(-50%);

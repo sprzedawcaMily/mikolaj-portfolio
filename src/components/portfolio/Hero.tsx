@@ -1,9 +1,7 @@
 import { motion } from 'framer-motion';
-import { createPortal } from 'react-dom';
-import { AnimatedNeonPortrait } from '@/components/animation/AnimatedNeonPortrait';
 import { Badge } from '@/components/emds';
 import { profile } from '@/data/profile';
-import { usePortraitScrollMorph, MESH_PORTAL_ID, HERO_MESH_ANCHOR_ID } from '@/hooks/usePortraitScrollMorph';
+import { HERO_MESH_ANCHOR_ID } from '@/hooks/meshScrollEngine';
 import styles from './Hero.module.css';
 
 const skillStats = [
@@ -14,34 +12,6 @@ const skillStats = [
 ];
 
 export function Hero() {
-  const { morphTarget, busMorphTarget, busRenderActive, forkMorphTarget, forkRenderActive, sprayMorphTarget, sprayRenderActive, aimPoint, pinStyle, isAtPalette } =
-    usePortraitScrollMorph();
-
-  const meshPortalRoot =
-    typeof document !== 'undefined' ? document.getElementById(MESH_PORTAL_ID) : null;
-
-  const meshLayer =
-    pinStyle &&
-    meshPortalRoot &&
-    createPortal(
-      <div
-        className={`${styles.meshBackground} ${isAtPalette ? styles.meshArrowMode : ''}`}
-        style={pinStyle}
-      >
-        <AnimatedNeonPortrait
-          morphProgress={morphTarget}
-          busMorphProgress={busMorphTarget}
-          busRenderActive={busRenderActive}
-          forkMorphProgress={forkMorphTarget}
-          forkRenderActive={forkRenderActive}
-          sprayMorphProgress={sprayMorphTarget}
-          sprayRenderActive={sprayRenderActive}
-          aimPoint={aimPoint}
-        />
-      </div>,
-      meshPortalRoot,
-    );
-
   return (
     <section className={styles.hero} id="top">
       <div className={styles.heroGrid}>
@@ -89,7 +59,6 @@ export function Hero() {
 
         <div id={HERO_MESH_ANCHOR_ID} className={styles.meshSlot} aria-hidden="true" />
       </div>
-      {meshLayer}
     </section>
   );
 }

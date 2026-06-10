@@ -21,16 +21,39 @@
   isolation: isolate;
 }
 
+.wrapLegitCheck {
+  position: relative;
+  overflow: visible;
+  z-index: 1;
+  isolation: isolate;
+}
+
+.wrapStyleRank {
+  position: relative;
+  overflow: visible;
+  z-index: 1;
+  isolation: isolate;
+}
+
 .meshSlot {
   position: absolute;
-  top: 0;
+  top: 50%;
   left: 100%;
   margin-left: 14px;
-  width: min(500px, 36vw);
-  height: 100%;
+  width: min(420px, 34vw);
+  height: min(420px, 42vh);
+  transform: translateY(-50%);
   pointer-events: none;
   z-index: 0;
   overflow: visible;
+  visibility: hidden;
+}
+
+.meshSlotLeft {
+  left: auto;
+  right: 100%;
+  margin-left: 0;
+  margin-right: 14px;
 }
 
 .card {
@@ -73,6 +96,19 @@
 }
 
 .cardKamochi {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+}
+
+.cardLegitCheck {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+}
+
+.cardStyleRank {
   position: relative;
   z-index: 1;
   isolation: isolate;

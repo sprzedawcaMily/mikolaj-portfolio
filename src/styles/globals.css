@@ -8,19 +8,18 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
+  background-color: var(--bg);
 }
 
 body {
+  position: relative;
   font-family: 'Outfit', sans-serif;
   color: var(--text);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
-  overflow-x: visible;
-}
-
-html {
-  background-color: var(--bg);
+  overflow-x: hidden;
 }
 
 body {
@@ -41,23 +40,23 @@ body {
   background-color: var(--bg);
 }
 
+#mesh-portal-root {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  min-height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
 #root {
   min-height: 100vh;
   position: relative;
   isolation: isolate;
-}
-
-#mesh-portal-root {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 0;
-  height: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: visible;
-  contain: none;
-  clip-path: none;
+  z-index: 1;
 }
 
 main,

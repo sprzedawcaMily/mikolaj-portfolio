@@ -10,11 +10,12 @@ interface Dot {
   phase: number;
 }
 
-const DOT_COUNT_DESKTOP = 36;
-const DOT_COUNT_MOBILE = 22;
-const LINK_DISTANCE = 120;
-const POINTER_DISTANCE = 170;
-const FRAME_INTERVAL = 1000 / 20;
+const DOT_COUNT_DESKTOP = 24;
+const DOT_COUNT_MOBILE = 14;
+const LINK_DISTANCE = 110;
+const POINTER_DISTANCE = 150;
+const FRAME_INTERVAL = 1000 / 15;
+const SCROLL_IDLE_MS = 180;
 
 function rand(seed: number) {
   const x = Math.sin(seed * 78.233) * 43758.5453;
@@ -41,6 +42,8 @@ export function InteractiveDotField() {
     let dots: Dot[] = [];
     let lastRender = 0;
     let running = document.visibilityState === 'visible';
+    let scrollPaused = false;
+    let scrollIdleTimer = 0;
 
     function buildDots() {
       const count = width < 720 ? DOT_COUNT_MOBILE : DOT_COUNT_DESKTOP;
@@ -70,15 +73,31 @@ export function InteractiveDotField() {
       buildDots();
     }
 
+    let dotColor = '#A78BFA';
+    let lineColor = 'rgba(167, 139, 250, 0.35)';
+    let themeReadAt = 0;
+
+    function readThemeColors(time: number) {
+      if (time - themeReadAt < 2000) return;
+      themeReadAt = time;
+      const theme = getComputedStyle(document.documentElement);
+      dotColor = theme.getPropertyValue('--dot').trim() || '#A78BFA';
+      lineColor = theme.getPropertyValue('--dot-line').trim() || 'rgba(167, 139, 250, 0.35)';
+    }
+
     function render(time: number) {
       if (!running) return;
-      frame = requestAnimationFrame(render);
-      if (time - lastRender < FRAME_INTERVAL) return;
+      if (scrollPaused) {
+        frame = requestAnimationFrame(render);
+        return;
+      }
+      if (time - lastRender < FRAME_INTERVAL) {
+        frame = requestAnimationFrame(render);
+        return;
+      }
       lastRender = time;
-
-      const theme = getComputedStyle(document.documentElement);
-      const dotColor = theme.getPropertyValue('--dot').trim() || '#A78BFA';
-      const lineColor = theme.getPropertyValue('--dot-line').trim() || 'rgba(167, 139, 250, 0.35)';
+      frame = requestAnimationFrame(render);
+      readThemeColors(time);
       drawingContext.clearRect(0, 0, width, height);
       drawingContext.save();
       drawingContext.globalCompositeOperation = 'lighter';
@@ -151,6 +170,14 @@ export function InteractiveDotField() {
       if (running && !wasRunning) frame = requestAnimationFrame(render);
     }
 
+    function onScroll() {
+      scrollPaused = true;
+      window.clearTimeout(scrollIdleTimer);
+      scrollIdleTimer = window.setTimeout(() => {
+        scrollPaused = false;
+      }, SCROLL_IDLE_MS);
+    }
+
     function onPointerMove(event: PointerEvent) {
       pointerRef.current = {
         x: event.clientX,
@@ -166,14 +193,17 @@ export function InteractiveDotField() {
     resize();
     frame = requestAnimationFrame(render);
     window.addEventListener('resize', resize, { passive: true });
+    window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('pointermove', onPointerMove, { passive: true });
     window.addEventListener('pointerleave', onPointerLeave);
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
       running = false;
+      window.clearTimeout(scrollIdleTimer);
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', resize);
+      window.removeEventListener('scroll', onScroll);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerleave', onPointerLeave);
       document.removeEventListener('visibilitychange', onVisibilityChange);

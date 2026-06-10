@@ -10,6 +10,18 @@
 
 }
 
+.meshSlot {
+  position: absolute;
+  left: 50%;
+  bottom: 72px;
+  width: min(1120px, 96vw);
+  height: min(720px, 72vh);
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 1;
+  overflow: visible;
+}
+
 
 
 .inner {

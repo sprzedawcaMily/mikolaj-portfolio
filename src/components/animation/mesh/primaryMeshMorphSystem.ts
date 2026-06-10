@@ -10,6 +10,15 @@ export interface Point2 {
   y: number;
 }
 
+export type MorphReflector = {
+  targetId: number;
+  hostId: number;
+  x: number;
+  y: number;
+  r: number;
+  phase: number;
+};
+
 export interface PrimaryMorphMaps {
   cluster: Point2;
   sources: Map<number, Point2>;
@@ -19,6 +28,8 @@ export interface PrimaryMorphMaps {
   targetEdges: { a: number; b: number }[];
   accentTargets: Map<number, Point2>;
   accentNodeIds: Set<number>;
+  /** Czerwone kropki SVG → reflektory (pozycja docelowa + host do kreski). */
+  reflectors: MorphReflector[];
   layoutScale: number;
   targetLayoutScale: number;
   /** Węzły autobusu bez pary w strzałce (np. dach) — canvas coords. */
@@ -43,6 +54,19 @@ function bodyNodeIds(mesh: SvgMesh) {
 
 function meshCenter(mesh: SvgMesh, ratioY = 0.52) {
   return { x: mesh.width / 2, y: mesh.height * ratioY };
+}
+
+/** Stała kolejność primary w każdej strefie — te same hostId budują bus i widelec. */
+function sortBodyNodesStable(mesh: SvgMesh, ids: number[], center: Point2) {
+  return [...ids].sort((a, b) => {
+    const na = mesh.nodes[a];
+    const nb = mesh.nodes[b];
+    if (!na || !nb) return a - b;
+    const aa = Math.atan2(na.y - center.y, na.x - center.x);
+    const ab = Math.atan2(nb.y - center.y, nb.x - center.x);
+    if (Math.abs(aa - ab) > 1e-9) return aa - ab;
+    return a - b;
+  });
 }
 
 /** Bijection: iteracja po primary (jak twarz), dopasowanie target. */
@@ -102,7 +126,6 @@ export function buildPrimaryMorphMaps(
   const targetLayoutFit = options.targetLayoutFit ?? layoutFit;
   const targetCenterRatioY = options.targetCenterRatioY ?? centerRatioY;
   const mapSource = options.mapSourcePoint;
-  const mapTarget = options.mapTargetPoint;
 
   const primaryLayout = layoutMeshOnCanvas(primaryMesh, canvasWidth, canvasHeight, layoutFit);
   const targetLayout = layoutMeshOnCanvas(
@@ -115,27 +138,17 @@ export function buildPrimaryMorphMaps(
   const primaryCenter = meshCenter(primaryMesh, centerRatioY);
   const targetCenter = meshCenter(targetMesh, targetCenterRatioY);
 
-  const sortedPrimary = bodyNodeIds(primaryMesh).sort((a, b) => {
-    const na = primaryMesh.nodes[a];
-    const nb = primaryMesh.nodes[b];
-    const pa = mapSource ? mapSource(na.x, na.y, primaryMesh) : na;
-    const pb = mapSource ? mapSource(nb.x, nb.y, primaryMesh) : nb;
-    return (
-      Math.atan2(pa.y - primaryCenter.y, pa.x - primaryCenter.x) -
-      Math.atan2(pb.y - primaryCenter.y, pb.x - primaryCenter.x)
-    );
-  });
+  const sortedPrimary = sortBodyNodesStable(
+    primaryMesh,
+    bodyNodeIds(primaryMesh),
+    primaryCenter,
+  );
 
-  const sortedTarget = bodyNodeIds(targetMesh).sort((a, b) => {
-    const na = targetMesh.nodes[a];
-    const nb = targetMesh.nodes[b];
-    const ta = mapTarget ? mapTarget(na.x, na.y, targetMesh) : na;
-    const tb = mapTarget ? mapTarget(nb.x, nb.y, targetMesh) : nb;
-    return (
-      Math.atan2(ta.y - targetCenter.y, ta.x - targetCenter.x) -
-      Math.atan2(tb.y - targetCenter.y, tb.x - targetCenter.x)
-    );
-  });
+  const sortedTarget = sortBodyNodesStable(
+    targetMesh,
+    bodyNodeIds(targetMesh),
+    targetCenter,
+  );
 
   const primaryToTarget = buildPrimaryTargetBijection(
     primaryMesh,
@@ -182,6 +195,9 @@ export function buildPrimaryMorphMaps(
   }
 
   const mergeTarget = new Map<number, number>();
+  const mergeLeaderTaken = new Set<number>();
+  const mergeCandidates: { memberId: number; leaderId: number; dist: number }[] = [];
+
   for (const primaryId of sortedPrimary) {
     if (mappedPrimary.has(primaryId)) continue;
     const node = primaryMesh.nodes[primaryId];
@@ -197,7 +213,16 @@ export function buildPrimaryMorphMaps(
         bestMapped = mappedId;
       }
     }
-    if (bestMapped >= 0) mergeTarget.set(primaryId, bestMapped);
+    if (bestMapped >= 0) {
+      mergeCandidates.push({ memberId: primaryId, leaderId: bestMapped, dist: bestDist });
+    }
+  }
+
+  mergeCandidates.sort((a, b) => a.dist - b.dist);
+  for (const { memberId, leaderId } of mergeCandidates) {
+    if (mergeLeaderTaken.has(leaderId) || mergeTarget.has(memberId)) continue;
+    mergeTarget.set(memberId, leaderId);
+    mergeLeaderTaken.add(leaderId);
   }
 
   for (const primaryId of primaryMesh.visibleNodeIds) {
@@ -217,8 +242,10 @@ export function buildPrimaryMorphMaps(
 
   const accentTargets = new Map<number, Point2>();
   const accentNodeIds = new Set<number>();
+  const reflectors: MorphReflector[] = [];
   for (const targetId of targetMesh.visibleNodeIds) {
-    if (targetMesh.nodes[targetId]?.group !== 'light') continue;
+    const node = targetMesh.nodes[targetId];
+    if (!node || node.group !== 'light') continue;
     const lightPos = targetByTargetId.get(targetId);
     if (!lightPos) continue;
 
@@ -235,6 +262,14 @@ export function buildPrimaryMorphMaps(
     if (bestPrimary >= 0) {
       accentNodeIds.add(bestPrimary);
       accentTargets.set(bestPrimary, { ...lightPos });
+      reflectors.push({
+        targetId,
+        hostId: bestPrimary,
+        x: lightPos.x,
+        y: lightPos.y,
+        r: node.r * targetLayout.scale,
+        phase: node.phase,
+      });
     }
   }
 
@@ -262,6 +297,7 @@ export function buildPrimaryMorphMaps(
     targetEdges,
     accentTargets,
     accentNodeIds,
+    reflectors,
     layoutScale: primaryLayout.scale,
     targetLayoutScale: targetLayout.scale,
     supplementNodes,

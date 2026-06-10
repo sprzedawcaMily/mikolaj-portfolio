@@ -1,5 +1,7 @@
+import { FlyingMeshDots } from '@/components/animation/FlyingMeshDots';
 import { InteractiveDotField } from '@/components/animation/InteractiveDotField';
 import { SiteHeader } from '@/components/layout/SiteHeader';
+import { MeshZoneProvider } from '@/context/MeshZoneContext';
 import {
   AboutSection,
   ContactSection,
@@ -11,23 +13,30 @@ import {
   SkillsSection,
 } from '@/components/portfolio';
 import { ThemeProvider } from '@/theme/ThemeProvider';
+import styles from './App.module.css';
 
 export default function App() {
   return (
     <ThemeProvider>
-      <div id="mesh-portal-root" aria-hidden="true" />
       <InteractiveDotField />
-      <SiteHeader />
-      <main>
-        <Hero />
-        <AboutSection />
-        <HuePickerSection />
-        <ProjectsSection />
-        <ExperienceSection />
-        <SkillsSection />
-        <ContactSection />
-      </main>
-      <SiteFooter />
+      <MeshZoneProvider>
+        <div className={styles.pageShell}>
+          <FlyingMeshDots />
+          <div className={styles.pageContent}>
+            <SiteHeader />
+            <main>
+              <Hero />
+              <AboutSection />
+              <HuePickerSection />
+              <ProjectsSection />
+              <ExperienceSection />
+              <SkillsSection />
+              <ContactSection />
+            </main>
+            <SiteFooter />
+          </div>
+        </div>
+      </MeshZoneProvider>
     </ThemeProvider>
   );
 }

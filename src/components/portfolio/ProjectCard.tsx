@@ -2,7 +2,13 @@ import { useCallback, useState } from 'react';
 import { DotReveal } from '@/components/animation/DotReveal';
 import { Badge, Card, MetaLabel } from '@/components/emds';
 import type { Project } from '@/data/projects';
-import { TRANSITRANK_MESH_ANCHOR_ID, FORKFULL_MESH_ANCHOR_ID, KAMOCHI_MESH_ANCHOR_ID } from '@/hooks/usePortraitScrollMorph';
+import {
+  TRANSITRANK_MESH_ANCHOR_ID,
+  FORKFULL_MESH_ANCHOR_ID,
+  KAMOCHI_MESH_ANCHOR_ID,
+  LEGITCHECK_MESH_ANCHOR_ID,
+  STYLERANK_MESH_ANCHOR_ID,
+} from '@/hooks/meshScrollEngine';
 import { ScreenshotLightbox } from './ScreenshotLightbox';
 import styles from './ProjectCard.module.css';
 interface ProjectCardProps {
@@ -67,22 +73,33 @@ export function ProjectCard({ project, index }: ProjectCardProps) {
     </div>
   ) : null;
 
+  const meshAnchorId =
+    project.id === 'transitrank'
+      ? TRANSITRANK_MESH_ANCHOR_ID
+      : project.id === 'forkfull'
+        ? FORKFULL_MESH_ANCHOR_ID
+        : project.id === 'kamochi'
+          ? KAMOCHI_MESH_ANCHOR_ID
+          : project.id === 'legitcheck'
+            ? LEGITCHECK_MESH_ANCHOR_ID
+            : project.id === 'stylerank'
+              ? STYLERANK_MESH_ANCHOR_ID
+              : null;
+
   return (
     <DotReveal
       delay={index * 0.06}
-      className={`${styles.wrap} ${project.id === 'transitrank' ? styles.wrapTransitRank : ''} ${project.id === 'forkfull' ? styles.wrapForkFull : ''} ${project.id === 'kamochi' ? styles.wrapKamochi : ''}`}
+      className={`${styles.wrap} ${project.id === 'transitrank' ? styles.wrapTransitRank : ''} ${project.id === 'forkfull' ? styles.wrapForkFull : ''} ${project.id === 'kamochi' ? styles.wrapKamochi : ''} ${project.id === 'legitcheck' ? styles.wrapLegitCheck : ''} ${project.id === 'stylerank' ? styles.wrapStyleRank : ''}`}
     >
+      {meshAnchorId && (
+        <div
+          id={meshAnchorId}
+          className={`${styles.meshSlot} ${project.id === 'forkfull' || project.id === 'legitcheck' ? styles.meshSlotLeft : ''}`}
+          aria-hidden="true"
+        />
+      )}
       <Card
-        id={
-          project.id === 'transitrank'
-            ? TRANSITRANK_MESH_ANCHOR_ID
-            : project.id === 'forkfull'
-              ? FORKFULL_MESH_ANCHOR_ID
-              : project.id === 'kamochi'
-                ? KAMOCHI_MESH_ANCHOR_ID
-                : undefined
-        }
-        className={`${styles.card} ${project.id === 'transitrank' ? styles.cardTransitRank : ''} ${project.id === 'forkfull' ? styles.cardForkFull : ''} ${project.id === 'kamochi' ? styles.cardKamochi : ''} ${!hasShots ? styles.cardNoShots : ''} ${isLandscape ? styles.cardLandscape : ''}`}
+        className={`${styles.card} ${project.id === 'transitrank' ? styles.cardTransitRank : ''} ${project.id === 'forkfull' ? styles.cardForkFull : ''} ${project.id === 'kamochi' ? styles.cardKamochi : ''} ${project.id === 'legitcheck' ? styles.cardLegitCheck : ''} ${project.id === 'stylerank' ? styles.cardStyleRank : ''} ${!hasShots ? styles.cardNoShots : ''} ${isLandscape ? styles.cardLandscape : ''}`}
       >
         <div className={styles.cardMain}>
           <div className={styles.header}>

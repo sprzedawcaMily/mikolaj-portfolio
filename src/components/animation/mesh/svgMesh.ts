@@ -36,6 +36,7 @@ function colorGroup(color: string | null): MeshGroup | null {
   if (!color) return null;
   const normalized = color.toLowerCase();
   if (normalized.includes('red') || normalized === '#ff0000' || normalized === '#f00') return 'light';
+  if (normalized === '#00ff62') return 'body';
   if (normalized.includes('white') || normalized === '#d9d9d9' || normalized === '#fff' || normalized === '#ffffff') {
     return 'body';
   }
