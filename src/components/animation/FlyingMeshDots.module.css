@@ -8,6 +8,11 @@
   overflow: visible;
 }
 
+/* Dzieci domyślnie mają pointer-events:auto — kropki pod kursorem blokują wheel na stronie. */
+.layer * {
+  pointer-events: none;
+}
+
 .wires {
   position: absolute;
   top: 0;
@@ -22,77 +27,34 @@
   border-radius: 50%;
   background: #d9d9d9;
   z-index: 1;
-  box-shadow: 0 0 3px rgba(255, 255, 255, 0.2);
-  will-change: transform, opacity;
   transform: translate3d(0, 0, 0);
+  contain: layout style;
 }
 
 .dotStar {
-  box-shadow:
-    0 0 4px rgba(255, 255, 255, 0.32),
-    0 0 10px rgba(255, 255, 255, 0.1),
-    0 0 14px color-mix(in srgb, var(--accent, #a78bfa) 6%, transparent);
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.22);
 }
 
 .dotFlight {
-  box-shadow:
-    0 0 5px color-mix(in srgb, var(--accent, #a78bfa) 32%, transparent),
-    0 0 10px color-mix(in srgb, var(--accent, #a78bfa) 16%, transparent);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--accent, #a78bfa) 28%, transparent);
 }
 
 .dotHair {
   background: var(--accent, #a78bfa);
-  box-shadow: 0 0 5px color-mix(in srgb, var(--accent, #a78bfa) 40%, transparent);
-}
-
-.dotStar.dotHair {
-  box-shadow:
-    0 0 5px color-mix(in srgb, var(--accent, #a78bfa) 46%, transparent),
-    0 0 10px color-mix(in srgb, var(--accent, #a78bfa) 12%, transparent);
-}
-
-.dotFlight.dotHair {
-  box-shadow:
-    0 0 6px color-mix(in srgb, var(--accent, #a78bfa) 52%, transparent),
-    0 0 12px color-mix(in srgb, var(--accent, #a78bfa) 22%, transparent);
 }
 
 .dotSettleBloom {
-  box-shadow:
-    0 0 5px rgba(255, 255, 255, 0.5),
-    0 0 14px color-mix(in srgb, var(--accent, #a78bfa) 38%, transparent),
-    0 0 26px color-mix(in srgb, var(--accent, #a78bfa) 16%, transparent);
-}
-
-.dotSettleBloom.dotHair {
-  box-shadow:
-    0 0 6px color-mix(in srgb, var(--accent, #a78bfa) 62%, transparent),
-    0 0 16px color-mix(in srgb, var(--accent, #a78bfa) 32%, transparent),
-    0 0 30px color-mix(in srgb, var(--accent, #a78bfa) 14%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent, #a78bfa) 32%, transparent);
 }
 
 .dotReflector {
   background: #ffffff !important;
-  box-shadow:
-    0 0 6px rgba(255, 255, 255, 0.95),
-    0 0 14px rgba(255, 255, 255, 0.55),
-    0 0 28px rgba(255, 255, 255, 0.28),
-    0 0 42px color-mix(in srgb, var(--accent, #a78bfa) 12%, rgba(255, 255, 255, 0.2));
-}
-
-.dotReflector.dotStar {
-  box-shadow:
-    0 0 8px rgba(255, 255, 255, 0.98),
-    0 0 18px rgba(255, 255, 255, 0.62),
-    0 0 34px rgba(255, 255, 255, 0.32),
-    0 0 48px color-mix(in srgb, var(--accent, #a78bfa) 14%, rgba(255, 255, 255, 0.22));
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.75);
 }
 
 .dotDiamond {
-  background: #ffffff !important;
+  background: #fff8eb !important;
   box-shadow:
-    0 0 8px rgba(255, 255, 255, 1),
-    0 0 18px rgba(255, 255, 255, 0.75),
-    0 0 30px color-mix(in srgb, #e9d5ff 36%, rgba(255, 255, 255, 0.4)),
-    0 0 44px color-mix(in srgb, var(--accent, #a78bfa) 18%, transparent);
+    0 0 4px rgba(255, 248, 235, 0.72),
+    0 0 9px rgba(232, 200, 114, 0.38);
 }

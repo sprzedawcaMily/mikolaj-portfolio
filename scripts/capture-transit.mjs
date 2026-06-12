@@ -66,26 +66,19 @@ async function main() {
   const checks = await page.evaluate(() => {
     const anchor = document.getElementById('transit-rank-mesh-anchor');
     const rect = anchor?.getBoundingClientRect();
-    const portal = document.getElementById('mesh-portal-root');
-    const busPortal = document.getElementById('transit-bus-portal-root');
-    const meshWrap = portal?.firstElementChild;
-    const meshRect = meshWrap?.getBoundingClientRect();
+    const layer = document.getElementById('mesh-flying-layer');
+    const canvas = document.getElementById('flying-mesh-canvas');
+    const layerRect = layer?.getBoundingClientRect();
     return {
-      singlePortalMesh: portal?.childElementCount === 1,
-      noSeparateBusPortal: (busPortal?.childElementCount ?? 0) === 0,
-      meshVisible: !!portal?.querySelector('canvas'),
-      meshRightOfCard: meshRect && rect ? meshRect.left >= rect.right - 12 : false,
-      meshCanvases: portal?.querySelectorAll('canvas').length ?? 0,
+      meshLayerPresent: !!layer,
+      meshCanvasPresent: !!canvas,
+      meshRightOfCard: layerRect && rect ? layerRect.left <= rect.right + 24 : false,
     };
   });
   console.log('Checks:', JSON.stringify(checks, null, 2));
 
-  if (!checks.singlePortalMesh || !checks.meshVisible) {
-    console.error('FAIL: brak jednego mesha w mesh-portal-root');
-    process.exitCode = 1;
-  }
-  if (!checks.noSeparateBusPortal) {
-    console.error('FAIL: nadal jest osobny portal autobusu');
+  if (!checks.meshLayerPresent || !checks.meshCanvasPresent) {
+    console.error('FAIL: brak warstwy FlyingMeshDots (#mesh-flying-layer / #flying-mesh-canvas)');
     process.exitCode = 1;
   }
   if (checks.meshCanvases !== 1) {

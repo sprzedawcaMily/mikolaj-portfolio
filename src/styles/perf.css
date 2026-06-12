@@ -1,0 +1,31 @@
+/* Tryb lite / slow — mniej kosztownych efektów GPU (klasy z meshPerfMode). */
+
+html.mesh-lite .dotStar,
+html.mesh-lite .dotFlight,
+html.mesh-lite .dotSettleBloom,
+html.mesh-lite .dotDiamond {
+  box-shadow: none !important;
+}
+
+html.mesh-slow *,
+html.mesh-slow *::before,
+html.mesh-slow *::after {
+  scroll-behavior: auto !important;
+}
+
+html.mesh-slow .content {
+  transition-duration: 0.28s !important;
+}
+
+html.mesh-reduced-motion .dotStar,
+html.mesh-reduced-motion .dotFlight,
+html.mesh-reduced-motion .dotSettleBloom,
+html.mesh-reduced-motion .dotDiamond {
+  box-shadow: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}

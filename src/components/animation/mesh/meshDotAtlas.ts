@@ -10,6 +10,10 @@ import {
 import type { SvgMesh } from '@/components/animation/mesh/svgMesh';
 import type { FaceMesh } from '@/components/animation/mesh/faceMesh';
 import { layoutFaceOnCanvas } from '@/components/animation/mesh/faceMesh';
+import {
+  EYE_MESH_CENTER_RATIO_Y,
+  EYE_MESH_LAYOUT_FIT,
+} from '@/components/animation/parseKamochiEyeSvg';
 
 export type NormGoal = { nx: number; ny: number };
 
@@ -74,9 +78,47 @@ const PALETTE_EXACT_SNAP_PX = 12;
 export const PALETTE_ARROW_BASE_GAP = 38;
 
 const palettePaddedLayoutCache = new Map<string, ZoneLayout>();
+const zoneLayoutCache = new Map<string, ZoneLayout>();
+
+const ALL_ATLAS_ZONES: MeshZone[] = [
+  'hero',
+  'palette',
+  'bus',
+  'fork',
+  'spray',
+  'loupe',
+  'ring',
+  'careerEye',
+  'skillsEye',
+  'contactArrow',
+];
+
+const EYE_LAYOUT_OPTS = {
+  layoutFit: EYE_MESH_LAYOUT_FIT,
+  centerRatioY: EYE_MESH_CENTER_RATIO_Y,
+  targetLayoutFit: EYE_MESH_LAYOUT_FIT,
+  targetCenterRatioY: EYE_MESH_CENTER_RATIO_Y,
+} as const;
+
+export function roundAtlasDim(n: number) {
+  return Math.max(16, Math.round(n / 16) * 16);
+}
+
+export function roundAtlasCanvas(w: number, h: number) {
+  return { w: roundAtlasDim(w), h: roundAtlasDim(h) };
+}
+
+function zoneLayoutCacheKey(zone: MeshZone, w: number, h: number) {
+  return `${zone}:${w}x${h}`;
+}
+
+export function clearZoneLayoutCache() {
+  zoneLayoutCache.clear();
+}
 
 export function clearPaletteLayoutCache() {
   palettePaddedLayoutCache.clear();
+  clearZoneLayoutCache();
 }
 
 function cloneZoneLayout(src: ZoneLayout): ZoneLayout {
@@ -442,7 +484,7 @@ function buildPalettePaddedLayout(
   canvasW: number,
   canvasH: number,
 ): ZoneLayout {
-  const key = `v11:${canvasW}x${canvasH}`;
+  const key = `v12:${canvasW}x${canvasH}`;
   const cached = palettePaddedLayoutCache.get(key);
   if (cached) return cloneZoneLayout(cached);
 
@@ -471,105 +513,159 @@ function buildPalettePaddedLayout(
   return cloneZoneLayout(layout);
 }
 
+export function buildZoneLayout(
+  zone: MeshZone,
+  master: FaceMesh,
+  zoneMeshes: Partial<Record<MeshZone, SvgMesh>>,
+  canvasW: number,
+  canvasH: number,
+): ZoneLayout | undefined {
+  const cacheKey = zoneLayoutCacheKey(zone, canvasW, canvasH);
+  const cached = zoneLayoutCache.get(cacheKey);
+  if (cached) return cached;
+
+  const primary = faceMeshToSvgMesh(master);
+  let layout: ZoneLayout | undefined;
+
+  switch (zone) {
+    case 'hero':
+      layout = buildHeroLayout(master, canvasW, canvasH);
+      break;
+    case 'palette':
+      if (zoneMeshes.palette) {
+        layout = buildPalettePaddedLayout(primary, zoneMeshes.palette, canvasW, canvasH);
+      }
+      break;
+    case 'bus':
+      if (zoneMeshes.bus) {
+        const maps = buildPrimaryMorphMaps(primary, zoneMeshes.bus, canvasW, canvasH, {
+          layoutFit: 0.82,
+          centerRatioY: 0.5,
+          targetLayoutFit: 0.74,
+          targetCenterRatioY: 0.44,
+          mapSourcePoint: rotateArrowToBusFrame,
+        });
+        layout = layoutFromMorphMaps(maps, canvasW, canvasH);
+      }
+      break;
+    case 'fork':
+      if (zoneMeshes.fork) {
+        const maps = buildPrimaryMorphMaps(primary, zoneMeshes.fork, canvasW, canvasH, {
+          layoutFit: 0.74,
+          centerRatioY: 0.44,
+          targetLayoutFit: 0.96,
+          targetCenterRatioY: 0.46,
+          mapSourcePoint: rotateBusToForkFrame,
+        });
+        layout = layoutFromMorphMaps(maps, canvasW, canvasH);
+      }
+      break;
+    case 'spray':
+      if (zoneMeshes.spray) {
+        const maps = buildPrimaryMorphMaps(primary, zoneMeshes.spray, canvasW, canvasH, {
+          layoutFit: 0.96,
+          centerRatioY: 0.46,
+          targetLayoutFit: 0.96,
+          targetCenterRatioY: 0.46,
+        });
+        layout = layoutFromMorphMaps(maps, canvasW, canvasH);
+      }
+      break;
+    case 'loupe':
+      if (zoneMeshes.loupe) {
+        const maps = buildPrimaryMorphMaps(primary, zoneMeshes.loupe, canvasW, canvasH, {
+          layoutFit: 0.96,
+          centerRatioY: 0.46,
+          targetLayoutFit: 0.96,
+          targetCenterRatioY: 0.46,
+        });
+        layout = layoutFromMorphMaps(maps, canvasW, canvasH);
+      }
+      break;
+    case 'ring':
+      if (zoneMeshes.ring) {
+        const maps = buildPrimaryMorphMaps(primary, zoneMeshes.ring, canvasW, canvasH, {
+          layoutFit: 0.96,
+          centerRatioY: 0.46,
+          targetLayoutFit: 0.96,
+          targetCenterRatioY: 0.46,
+        });
+        layout = layoutFromMorphMaps(maps, canvasW, canvasH);
+      }
+      break;
+    case 'careerEye':
+      if (zoneMeshes.careerEye) {
+        const maps = buildPrimaryMorphMaps(primary, zoneMeshes.careerEye, canvasW, canvasH, EYE_LAYOUT_OPTS);
+        layout = layoutFromMorphMaps(maps, canvasW, canvasH);
+      }
+      break;
+    case 'skillsEye':
+      if (zoneMeshes.skillsEye) {
+        const maps = buildPrimaryMorphMaps(primary, zoneMeshes.skillsEye, canvasW, canvasH, EYE_LAYOUT_OPTS);
+        layout = layoutFromMorphMaps(maps, canvasW, canvasH);
+      }
+      break;
+    case 'contactArrow':
+      if (zoneMeshes.contactArrow) {
+        const maps = buildPrimaryMorphMaps(primary, zoneMeshes.contactArrow, canvasW, canvasH, {
+          layoutFit: 1.04,
+          centerRatioY: 0.5,
+          targetLayoutFit: 0.92,
+          targetCenterRatioY: 0.94,
+        });
+        layout = layoutFromMorphMaps(maps, canvasW, canvasH);
+      }
+      break;
+    default:
+      break;
+  }
+
+  if (!layout) return undefined;
+
+  zoneLayoutCache.set(cacheKey, layout);
+  if (zoneLayoutCache.size > 72) {
+    const oldest = zoneLayoutCache.keys().next().value;
+    if (oldest) zoneLayoutCache.delete(oldest);
+  }
+  return layout;
+}
+
+export function ensureAtlasZones(
+  atlas: DotAtlas,
+  master: FaceMesh,
+  zoneMeshes: Partial<Record<MeshZone, SvgMesh>>,
+  canvasW: number,
+  canvasH: number,
+  zones: readonly MeshZone[],
+) {
+  for (const zone of zones) {
+    if (atlas.zones[zone]) continue;
+    const layout = buildZoneLayout(zone, master, zoneMeshes, canvasW, canvasH);
+    if (layout) atlas.zones[zone] = layout;
+  }
+}
+
+export function createEmptyDotAtlas(master: FaceMesh, canvasW: number, canvasH: number): DotAtlas {
+  return {
+    masterIds: [...master.visibleNodeIds],
+    zones: {},
+    cluster: { x: canvasW * 0.5, y: canvasH * 0.48 },
+  };
+}
+
 export function buildDotAtlas(
   master: FaceMesh,
   zoneMeshes: Partial<Record<MeshZone, SvgMesh>>,
   canvasW: number,
   canvasH: number,
   _aimPoint?: { x: number; y: number; centerX?: number } | null,
+  onlyZones?: readonly MeshZone[],
 ): DotAtlas {
-  const primary = faceMeshToSvgMesh(master);
-  const zones: Partial<Record<MeshZone, ZoneLayout>> = {};
-  zones.hero = buildHeroLayout(master, canvasW, canvasH);
-
-  if (zoneMeshes.palette) {
-    zones.palette = buildPalettePaddedLayout(primary, zoneMeshes.palette, canvasW, canvasH);
-  }
-
-  if (zoneMeshes.bus) {
-    const maps = buildPrimaryMorphMaps(primary, zoneMeshes.bus, canvasW, canvasH, {
-      layoutFit: 0.82,
-      centerRatioY: 0.5,
-      targetLayoutFit: 0.74,
-      targetCenterRatioY: 0.44,
-      mapSourcePoint: rotateArrowToBusFrame,
-    });
-    zones.bus = layoutFromMorphMaps(maps, canvasW, canvasH);
-  }
-
-  if (zoneMeshes.fork) {
-    const maps = buildPrimaryMorphMaps(primary, zoneMeshes.fork, canvasW, canvasH, {
-      layoutFit: 0.74,
-      centerRatioY: 0.44,
-      targetLayoutFit: 0.96,
-      targetCenterRatioY: 0.46,
-      mapSourcePoint: rotateBusToForkFrame,
-    });
-    zones.fork = layoutFromMorphMaps(maps, canvasW, canvasH);
-  }
-
-  if (zoneMeshes.spray) {
-    const maps = buildPrimaryMorphMaps(primary, zoneMeshes.spray, canvasW, canvasH, {
-      layoutFit: 0.96,
-      centerRatioY: 0.46,
-      targetLayoutFit: 0.96,
-      targetCenterRatioY: 0.46,
-    });
-    zones.spray = layoutFromMorphMaps(maps, canvasW, canvasH);
-  }
-
-  if (zoneMeshes.loupe) {
-    const maps = buildPrimaryMorphMaps(primary, zoneMeshes.loupe, canvasW, canvasH, {
-      layoutFit: 0.96,
-      centerRatioY: 0.46,
-      targetLayoutFit: 0.96,
-      targetCenterRatioY: 0.46,
-    });
-    zones.loupe = layoutFromMorphMaps(maps, canvasW, canvasH);
-  }
-
-  if (zoneMeshes.ring) {
-    const maps = buildPrimaryMorphMaps(primary, zoneMeshes.ring, canvasW, canvasH, {
-      layoutFit: 0.96,
-      centerRatioY: 0.46,
-      targetLayoutFit: 0.96,
-      targetCenterRatioY: 0.46,
-    });
-    zones.ring = layoutFromMorphMaps(maps, canvasW, canvasH);
-  }
-
-  const eyeLayoutOpts = {
-    layoutFit: 1,
-    centerRatioY: 0.46,
-    targetLayoutFit: 1.04,
-    targetCenterRatioY: 0.5,
-  } as const;
-
-  if (zoneMeshes.careerEye) {
-    const maps = buildPrimaryMorphMaps(primary, zoneMeshes.careerEye, canvasW, canvasH, eyeLayoutOpts);
-    zones.careerEye = layoutFromMorphMaps(maps, canvasW, canvasH);
-  }
-
-  if (zoneMeshes.skillsEye) {
-    const maps = buildPrimaryMorphMaps(primary, zoneMeshes.skillsEye, canvasW, canvasH, eyeLayoutOpts);
-    zones.skillsEye = layoutFromMorphMaps(maps, canvasW, canvasH);
-  }
-
-  if (zoneMeshes.contactArrow) {
-    const maps = buildPrimaryMorphMaps(primary, zoneMeshes.contactArrow, canvasW, canvasH, {
-      layoutFit: 1.04,
-      centerRatioY: 0.5,
-      targetLayoutFit: 0.92,
-      targetCenterRatioY: 0.94,
-    });
-    zones.contactArrow = layoutFromMorphMaps(maps, canvasW, canvasH);
-  }
-
-  return {
-    masterIds: [...master.visibleNodeIds],
-    zones,
-    cluster: { x: canvasW * 0.5, y: canvasH * 0.48 },
-  };
+  const { w, h } = roundAtlasCanvas(canvasW, canvasH);
+  const atlas = createEmptyDotAtlas(master, w, h);
+  const zones = onlyZones ?? ALL_ATLAS_ZONES;
+  ensureAtlasZones(atlas, master, zoneMeshes, w, h, zones);
+  return atlas;
 }
 
 export function zoneLayout(atlas: DotAtlas, zone: MeshZone): ZoneLayout | undefined {

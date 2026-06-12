@@ -13,7 +13,7 @@
   padding: 10px 12px;
   background: color-mix(in srgb, var(--surface) 48%, transparent);
   border: 1px solid var(--border-subtle);
-  backdrop-filter: blur(24px);
+  backdrop-filter: blur(10px);
 }
 
 .logo {

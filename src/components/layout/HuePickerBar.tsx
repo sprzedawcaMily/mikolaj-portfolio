@@ -25,6 +25,7 @@ export function HuePickerBar({ className }: HuePickerBarProps) {
 
   const onPointerDown = useCallback((event: { clientX: number; pointerId: number; currentTarget: HTMLDivElement }) => {
     draggingRef.current = true;
+    event.currentTarget.style.touchAction = 'none';
     event.currentTarget.setPointerCapture(event.pointerId);
     pickAt(event.clientX);
   }, [pickAt]);
@@ -36,6 +37,7 @@ export function HuePickerBar({ className }: HuePickerBarProps) {
 
   const onPointerUp = useCallback((event: { pointerId: number; currentTarget: HTMLDivElement }) => {
     draggingRef.current = false;
+    event.currentTarget.style.touchAction = '';
     event.currentTarget.releasePointerCapture(event.pointerId);
   }, []);
 

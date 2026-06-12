@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "fix-svg": "node scripts/fix-mesh-svg.mjs",
-    "count-dots": "bun scripts/count-mesh-dots.mjs"
+    "count-dots": "bun scripts/count-mesh-dots.mjs",
+    "perf:audit": "bun scripts/perf-audit.mjs"
   },
   "dependencies": {
     "framer-motion": "^11.18.2",

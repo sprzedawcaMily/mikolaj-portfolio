@@ -42,10 +42,10 @@ export const skillGroups: SkillGroup[] = [
     id: 'ai',
     label: 'AI & Automatyzacja',
     items: [
-      'Google Gemini',
+      'Google Gemini API',
       'Firebase Functions + LLM',
       'RPA · scraping',
-      'Computer vision (auth check)',
+      'Computer vision (LegitCheck)',
       'AI Coding Assistants',
     ],
   },

@@ -38,9 +38,9 @@ await scrollToCenterY(page, 'forkfull-mesh-anchor', 900 * 0.5);
 await page.waitForTimeout(1600);
 
 const state = await page.evaluate(() => {
-  const canvas = document.querySelector('#mesh-portal-root canvas');
+  const canvas = document.querySelector('#flying-mesh-canvas');
   const anchor = document.getElementById('forkfull-mesh-anchor')?.getBoundingClientRect();
-  const wrap = document.querySelector('#mesh-portal-root > div')?.getBoundingClientRect();
+  const wrap = document.getElementById('mesh-flying-layer')?.getBoundingClientRect();
   let bright = 0;
   if (canvas?.width) {
     const d = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;

@@ -8,4 +8,25 @@
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text);
+  margin-bottom: 12px;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 16px;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.link:hover {
+  color: var(--accent);
 }

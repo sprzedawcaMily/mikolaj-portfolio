@@ -3,7 +3,8 @@ import styles from './SiteHeader.module.css';
 const links = [
   { href: '#o-mnie', label: 'O mnie' },
   { href: '#projekty', label: 'Projekty' },
-  { href: '#doswiadczenie', label: 'Doświadczenie' },
+  { href: '#doswiadczenie', label: 'Kariera' },
+  { href: '#umiejetnosci', label: 'Umiejętności' },
   { href: '#kontakt', label: 'Kontakt' },
 ];
 

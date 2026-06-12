@@ -24,7 +24,7 @@
 @media (min-width: 1080px) {
   .arrowSlot {
     width: 272px;
-    left: calc(50% - 640px);
+    left: max(16px, calc(50% - 640px));
     bottom: 148px;
   }
 }

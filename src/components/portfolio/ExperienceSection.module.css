@@ -37,6 +37,32 @@
   color: var(--accent);
 }
 
+.educationBlock {
+  margin-top: 48px;
+  padding-top: 40px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 35%, transparent);
+}
+
+.school {
+  margin-top: 8px;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.degree {
+  margin-top: 4px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.meta {
+  margin-top: 4px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 .highlights {
   list-style: none;
   display: flex;

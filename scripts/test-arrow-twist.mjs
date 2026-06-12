@@ -9,12 +9,12 @@ async function aimAngle(page) {
   return page.evaluate(() => {
     const thumb = document.getElementById('palette-color-thumb');
     const section = document.getElementById('studio-palety');
-    const portal = document.getElementById('mesh-portal-root');
-    const stage = portal?.querySelector('[class*="meshBackground"]');
-    if (!thumb || !section || !stage) return null;
+    const layer = document.getElementById('mesh-flying-layer');
+    const canvas = document.getElementById('flying-mesh-canvas');
+    if (!thumb || !section || !layer || !canvas) return null;
 
     const t = thumb.getBoundingClientRect();
-    const s = stage.getBoundingClientRect();
+    const s = layer.getBoundingClientRect();
     const c = section.getBoundingClientRect();
     const aimX = t.left + t.width / 2 - s.left;
     const aimY = t.top - 18 - s.top;

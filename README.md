@@ -30,25 +30,20 @@ git push -u origin main
 
 ## Zrzuty ekranów aplikacji
 
-Skopiuj swoje screeny do `public/images/` według struktury:
+Skopiuj swoje screeny do `public/images/` według struktury (folder = projekt / sekcja):
 
 ```
 public/images/
-  transitrank/
-    dashboard.png
-    reviews.png
-    add-review.png
-    planner.png
-    more.png
-  forkfull/
-    home.png
-    meal.png
-    breakdown.png
-    plan.png
-    settings.png
-  kamochi/
-    store.png
+  profile/          # hero, paleta (o mnie), strzałka kontaktu
+  transitrank/      # autobus.svg + screeny mobile
+  forkfull/         # widelec.svg + screeny mobile
+  kamochi/          # sprej.svg + screeny sklepu
+  legitcheck/       # lupa.svg (mesh karty LegitCheck)
+  stylerank/        # pierscionek.svg + screeny web
+  experience/       # oko2.svg (mesh Doświadczenie + Umiejętności)
 ```
+
+Ścieżki mesh SVG są scentralizowane w `src/data/meshAssets.ts`.
 
 Możesz też wrzucić pliki do folderu `zdjecia/` i uruchomić:
 
@@ -60,35 +55,50 @@ Możesz też wrzucić pliki do folderu `zdjecia/` i uruchomić:
 
 ```
 src/
-  animation/       # siatka twarzy, DotReveal przy scrollu
   components/
-    emds/          # Card, Button, Badge… (EMDS)
-    layout/        # nagłówek, przełącznik motywu
-    portfolio/     # sekcje strony
-  data/            # CV, projekty, umiejętności
-  hooks/
-  theme/           # tokeny light/dark + React Native export
+    animation/       # FlyingMeshDots, flyingDotEngine, KamochiEye, mesh/
+    debug/           # MeshPerfMonitor (?perf=1 / dev)
+    emds/            # Card, Button, Badge… (EMDS)
+    layout/          # nagłówek, hue picker
+    portfolio/       # sekcje strony
+  data/              # CV, projekty, meshAssets (ścieżki SVG)
+  hooks/             # meshScrollEngine, meshAnimationLoop, perf
+  theme/             # tokeny light/dark + React Native export
 ```
+
+## Animacja scroll-morph
+
+Jedna warstwa canvas (`FlyingMeshDots`) morphuje kropki między strefami po scrollu:
+
+1. **Hero** — twarz z kropek  
+2. **Paleta** — siatka kolorów (Studio)  
+3. **Projekty** — autobus → widelec → sprej → lupa → pierścionek  
+4. **Kariera / umiejętności** — oko Kamochi  
+5. **Kontakt** — strzałka  
+
+| Warstwa | Plik |
+|---------|------|
+| React + canvas | `src/components/animation/FlyingMeshDots.tsx` |
+| Silnik lotu / paint | `src/components/animation/flyingDotEngine.ts` |
+| Strefy scrolla | `src/hooks/meshScrollEngine.ts` |
+| Pętla RAF | `src/hooks/meshAnimationLoop.ts` |
+| SVG / atlas | `src/components/animation/mesh/` |
+
+Zasady stabilności: `.cursor/rules/scroll-morph-stability.mdc`
+
+### Tryby wydajności (URL)
+
+- `?full=1` — pełne 60 FPS, bez auto-lite  
+- `?lite=1` — mniej efektów  
+- `?slow=1` — symulacja słabego PC  
+- `?perf=1` — monitor FPS (prod)
 
 ## Motywy
 
 - **Dzień** — tokeny EMDS Assembless Earth (`#F6F4F0` / `#FFFFFF`)
-- **Noc** — ciemny fiolet z jaśniejszą powierzchnią (zgodnie z zasadą EMDS: surface > background)
+- **Noc** — ciemny fiolet z jaśniejszą powierzchnią (surface > background)
 
 Przełącznik w prawym górnym rogu; wybór zapisywany w `localStorage`.
-
-## Animacja scroll-morph (twarz → strzałka → projekty)
-
-Mesh w portalu (`#mesh-portal-root`) morphuje się po scrollu przez sekcje:
-
-1. **Hero** — twarz z kropek  
-2. **Paleta** — twarz → strzałka (scroll trigger, animacja czasowa)  
-3. **TransitRank / Forkfull / Kamochi** — strzałka → autobus → widelec → sprej  
-
-Logika: `src/hooks/usePortraitScrollMorph.ts`  
-Canvas: `src/components/animation/AnimatedNeonPortrait.tsx`
-
-Zasady stabilności (dla AI i maintainerów): `.cursor/rules/scroll-morph-stability.mdc`
 
 ## React Native
 

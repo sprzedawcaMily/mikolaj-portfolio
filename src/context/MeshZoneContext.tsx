@@ -8,63 +8,71 @@ import {
 import {
   computeScrollFrame,
   type MeshZone,
-  type ScrollAimPoint,
 } from '@/hooks/meshScrollEngine';
 import { currentMeshFrameId, subscribeMeshFrame } from '@/hooks/meshAnimationLoop';
+import {
+  isMeshScrolling,
+  publishMeshZone,
+  readMeshZone,
+  subscribeMeshZone,
+} from '@/hooks/meshZoneStore';
 
 type MeshZoneContextValue = {
   zone: MeshZone;
-  paletteAim: ScrollAimPoint | null;
 };
 
 const MeshZoneContext = createContext<MeshZoneContextValue>({
   zone: 'hero',
-  paletteAim: null,
 });
 
 export function MeshZoneProvider({ children }: { children: ReactNode }) {
-  const [value, setValue] = useState<MeshZoneContextValue>({
-    zone: 'hero',
-    paletteAim: null,
-  });
+  const [zone, setZone] = useState<MeshZone>('hero');
 
   useLayoutEffect(() => {
     let active = true;
 
-    const unsubscribe = subscribeMeshFrame(() => {
+    const unsubscribeFrame = subscribeMeshFrame(() => {
       if (!active || document.hidden) return;
+      if (isMeshScrolling()) return;
       const frame = computeScrollFrame(currentMeshFrameId());
       if (!frame) return;
 
-      setValue((prev) => {
-        if (prev.zone !== frame.zone) {
-          return { zone: frame.zone, paletteAim: frame.paletteAim };
+      const prev = readMeshZone();
+
+      if (frame.zone !== 'palette' || !frame.paletteAim) {
+        if (prev.paletteAim !== frame.paletteAim) {
+          publishMeshZone({ zone: prev.zone, paletteAim: frame.paletteAim });
         }
-        if (frame.zone !== 'palette' || !frame.paletteAim) {
-          if (prev.paletteAim === frame.paletteAim) return prev;
-          return { zone: frame.zone, paletteAim: frame.paletteAim };
-        }
-        const next = frame.paletteAim;
-        const cur = prev.paletteAim;
-        if (
-          cur
-          && Math.round(cur.x * 4) === Math.round(next.x * 4)
-          && Math.round(cur.y * 4) === Math.round(next.y * 4)
-        ) {
-          return prev;
-        }
-        return { zone: frame.zone, paletteAim: next };
-      });
+        return;
+      }
+
+      const next = frame.paletteAim;
+      const cur = prev.paletteAim;
+      if (
+        cur
+        && Math.round(cur.x * 4) === Math.round(next.x * 4)
+        && Math.round(cur.y * 4) === Math.round(next.y * 4)
+      ) {
+        return;
+      }
+
+      publishMeshZone({ zone: frame.zone, paletteAim: next });
+    });
+
+    const unsubscribeZone = subscribeMeshZone(() => {
+      if (!active) return;
+      setZone(readMeshZone().zone);
     });
 
     return () => {
       active = false;
-      unsubscribe();
+      unsubscribeFrame();
+      unsubscribeZone();
     };
   }, []);
 
   return (
-    <MeshZoneContext.Provider value={value}>
+    <MeshZoneContext.Provider value={{ zone }}>
       {children}
     </MeshZoneContext.Provider>
   );

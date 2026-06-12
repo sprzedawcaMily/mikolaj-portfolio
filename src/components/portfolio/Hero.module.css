@@ -95,7 +95,7 @@
   border-radius: 36px;
   background: color-mix(in srgb, var(--surface) 36%, transparent);
   border: 1px solid color-mix(in srgb, var(--border-subtle) 35%, transparent);
-  backdrop-filter: blur(22px);
+  backdrop-filter: blur(10px);
   text-align: left;
   pointer-events: auto;
 }
@@ -228,6 +228,7 @@
   padding: 0 28px;
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -255,7 +256,7 @@ button.ctaSecondary {
   color: var(--text);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(8px);
 }
 
 .ctaActive {

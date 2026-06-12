@@ -10,7 +10,7 @@
   height: 14px;
   border-radius: 999px;
   cursor: pointer;
-  touch-action: none;
+  touch-action: pan-y;
   background: linear-gradient(
     90deg,
     #ff3b30 0%,

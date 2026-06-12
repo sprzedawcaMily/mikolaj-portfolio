@@ -161,6 +161,7 @@ export const projects: Project[] = [
       'i18n, React Native Paper (MD3)',
     ],
     accent: '#A78BFA',
+    url: 'https://play.google.com/store/apps/details?id=com.legitcheck.app',
     screenshots: [],
     features: [
       'Porównanie zdjęć user vs baza authentic/fake',

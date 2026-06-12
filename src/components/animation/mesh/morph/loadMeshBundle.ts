@@ -1,22 +1,25 @@
 import {
+  parseKamochiEyeSvg,
+  parseWhiteZonePathPoints,
   pointInEyeIris,
   segmentMidpointInEyeIris,
 } from '@/components/animation/parseKamochiEyeSvg';
 import { parseFaceMesh } from '@/components/animation/mesh/faceMesh';
 import { parsePaletteSvgMesh } from '@/components/animation/mesh/parsePaletteMesh';
 import { parseSvgMesh, type SvgMesh } from '@/components/animation/mesh/svgMesh';
+import { MESH_ASSETS } from '@/data/meshAssets';
 import type { MeshZone } from '@/hooks/meshScrollEngine';
-import type { MeshBundle } from './types';
+import type { EyeWhiteHull, MeshBundle } from './types';
 
-const FACE_SOURCE = '/images/profile/Group%205.svg?v=svg-mesh-5';
-const PALETTE_SOURCE = '/images/profile/paleta.svg?v=palette-mesh-3';
-const BUS_SOURCE = '/images/transitrank/autobus.svg?v=bus-mesh-16';
-const FORK_SOURCE = '/images/forkfull/widelec.svg?v=fork-mesh-5';
-const SPRAY_SOURCE = '/images/kamochi/sprej.svg?v=spray-mesh-4';
-const LOUPE_SOURCE = '/images/kamochi/lupa.svg?v=loupe-mesh-5';
-const RING_SOURCE = '/images/kamochi/pierscionek.svg?v=ring-mesh-4';
-const EYE_SOURCE = '/images/kamochi/oko2.svg?v=eye-mesh-3';
-const CONTACT_ARROW_SOURCE = '/images/profile/strzalak.svg?v=contact-arrow-2';
+type DeferredRaw = {
+  busSvg: string | null;
+  forkSvg: string | null;
+  spraySvg: string | null;
+  loupeSvg: string | null;
+  ringSvg: string | null;
+  eyeSvg: string | null;
+  arrowSvg: string | null;
+};
 
 function parseEyeMesh(svgText: string): SvgMesh {
   const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
@@ -52,7 +55,7 @@ function parseEyeMesh(svgText: string): SvgMesh {
   return parseSvgMesh(new XMLSerializer().serializeToString(doc), { strictLineSnap: true });
 }
 
-async function fetchSvg(url: string) {
+async function fetchSvg(url: string): Promise<string | null> {
   try {
     const res = await fetch(url);
     return res.ok ? res.text() : null;
@@ -61,34 +64,97 @@ async function fetchSvg(url: string) {
   }
 }
 
+function parseDeferredZones(
+  zoneMeshes: Partial<Record<MeshZone, SvgMesh>>,
+  raw: DeferredRaw,
+): EyeWhiteHull | null {
+  let eyeWhiteHull: EyeWhiteHull | null = null;
+  if (raw.busSvg) zoneMeshes.bus = parseSvgMesh(raw.busSvg, { strictLineSnap: true });
+  if (raw.forkSvg) zoneMeshes.fork = parseSvgMesh(raw.forkSvg, { strictLineSnap: false });
+  if (raw.spraySvg) zoneMeshes.spray = parseSvgMesh(raw.spraySvg, { strictLineSnap: true });
+  if (raw.loupeSvg) zoneMeshes.loupe = parseSvgMesh(raw.loupeSvg, { strictLineSnap: true });
+  if (raw.ringSvg) zoneMeshes.ring = parseSvgMesh(raw.ringSvg, { strictLineSnap: true });
+  if (raw.eyeSvg) {
+    const eyeMesh = parseEyeMesh(raw.eyeSvg);
+    zoneMeshes.careerEye = eyeMesh;
+    zoneMeshes.skillsEye = eyeMesh;
+    const eyeParsed = parseKamochiEyeSvg(raw.eyeSvg);
+    if (eyeParsed.whiteZonePath) {
+      eyeWhiteHull = {
+        path: eyeParsed.whiteZonePath,
+        points: parseWhiteZonePathPoints(eyeParsed.whiteZonePath),
+      };
+    }
+  }
+  if (raw.arrowSvg) {
+    zoneMeshes.contactArrow = parseSvgMesh(raw.arrowSvg, { strictLineSnap: true });
+  }
+  return eyeWhiteHull;
+}
+
+async function fetchDeferredRaw(): Promise<DeferredRaw> {
+  const [busSvg, forkSvg, spraySvg, loupeSvg, ringSvg, eyeSvg, arrowSvg] = await Promise.all([
+    fetchSvg(MESH_ASSETS.bus),
+    fetchSvg(MESH_ASSETS.fork),
+    fetchSvg(MESH_ASSETS.spray),
+    fetchSvg(MESH_ASSETS.loupe),
+    fetchSvg(MESH_ASSETS.ring),
+    fetchSvg(MESH_ASSETS.eye),
+    fetchSvg(MESH_ASSETS.contactArrow),
+  ]);
+  return { busSvg, forkSvg, spraySvg, loupeSvg, ringSvg, eyeSvg, arrowSvg };
+}
+
+function scheduleIdleWork(fn: () => void) {
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(fn, { timeout: 2400 });
+  } else {
+    window.setTimeout(fn, 0);
+  }
+}
+
+function expandDeferredZones(
+  bundle: MeshBundle,
+  expandListeners: Set<() => void>,
+  raw: DeferredRaw,
+) {
+  bundle.eyeWhiteHull = parseDeferredZones(bundle.zoneMeshes, raw);
+  bundle.zonesReady = true;
+  for (const fn of expandListeners) fn();
+  expandListeners.clear();
+}
+
+/** Twarz + paleta od razu; reszta stref fetch + parse w idle — szybszy first paint. */
 export async function loadMeshBundle(): Promise<MeshBundle> {
-  const [faceSvg, paletteSvg, busSvg, forkSvg, spraySvg, loupeSvg, ringSvg, eyeSvg, arrowSvg] = await Promise.all([
-    fetch(FACE_SOURCE).then((r) => r.text()),
-    fetchSvg(PALETTE_SOURCE),
-    fetchSvg(BUS_SOURCE),
-    fetchSvg(FORK_SOURCE),
-    fetchSvg(SPRAY_SOURCE),
-    fetchSvg(LOUPE_SOURCE),
-    fetchSvg(RING_SOURCE),
-    fetchSvg(EYE_SOURCE),
-    fetchSvg(CONTACT_ARROW_SOURCE),
+  const [faceSvg, paletteSvg] = await Promise.all([
+    fetch(MESH_ASSETS.hero).then((r) => r.text()),
+    fetchSvg(MESH_ASSETS.palette),
   ]);
 
   const zoneMeshes: Partial<Record<MeshZone, SvgMesh>> = {};
   if (paletteSvg) zoneMeshes.palette = parsePaletteSvgMesh(paletteSvg);
-  if (busSvg) zoneMeshes.bus = parseSvgMesh(busSvg, { strictLineSnap: true });
-  if (forkSvg) zoneMeshes.fork = parseSvgMesh(forkSvg, { strictLineSnap: false });
-  if (spraySvg) zoneMeshes.spray = parseSvgMesh(spraySvg, { strictLineSnap: true });
-  if (loupeSvg) zoneMeshes.loupe = parseSvgMesh(loupeSvg, { strictLineSnap: true });
-  if (ringSvg) zoneMeshes.ring = parseSvgMesh(ringSvg, { strictLineSnap: true });
-  if (eyeSvg) {
-    const eyeMesh = parseEyeMesh(eyeSvg);
-    zoneMeshes.careerEye = eyeMesh;
-    zoneMeshes.skillsEye = eyeMesh;
-  }
-  if (arrowSvg) {
-    zoneMeshes.contactArrow = parseSvgMesh(arrowSvg, { strictLineSnap: true });
-  }
 
-  return { faceMesh: parseFaceMesh(faceSvg), zoneMeshes };
+  const expandListeners = new Set<() => void>();
+  const bundle: MeshBundle = {
+    faceMesh: parseFaceMesh(faceSvg),
+    zoneMeshes,
+    eyeWhiteHull: null,
+    zonesReady: false,
+    onZonesExpanded: (fn) => {
+      if (bundle.zonesReady) {
+        fn();
+        return () => {};
+      }
+      expandListeners.add(fn);
+      return () => {
+        expandListeners.delete(fn);
+      };
+    },
+  };
+
+  void fetchDeferredRaw().then((raw) => {
+    scheduleIdleWork(() => expandDeferredZones(bundle, expandListeners, raw));
+  });
+
+  return bundle;
 }

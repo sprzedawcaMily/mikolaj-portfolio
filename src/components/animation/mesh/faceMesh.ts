@@ -505,6 +505,57 @@ function hairLocalMix(
   return Math.pow(1 - dist / radius, 2);
 }
 
+export type FaceCanvasLayout = ReturnType<typeof layoutFaceOnCanvas>;
+
+/** Tylko odsunięcie od kursora + panic shake — różnica anim−rest przy pointer.active. */
+export function facePointerOffset(
+  mesh: FaceMesh,
+  node: FaceNode,
+  layout: FaceCanvasLayout,
+  canvasW: number,
+  canvasH: number,
+  now: number,
+  pointer: { x: number; y: number; active: boolean },
+  liveMotion: number,
+): { dx: number; dy: number } {
+  if (!pointer.active || liveMotion <= 0) return { dx: 0, dy: 0 };
+
+  const { scale, offsetX, offsetY } = layout;
+  const baseX = offsetX + node.x * scale;
+  const baseY = offsetY + node.y * scale;
+  const pointerX = canvasW * (0.5 + pointer.x);
+  const pointerY = canvasH * (0.5 + pointer.y);
+  const dx = baseX - pointerX;
+  const dy = baseY - pointerY;
+  const distance = Math.hypot(dx, dy);
+  const radius = node.group === 'hair' ? 200 : 160;
+  if (distance >= radius) return { dx: 0, dy: 0 };
+
+  const faceLive = node.group === 'face' ? liveMotion : 1;
+  const hairLive = node.group === 'hair' ? liveMotion : 1;
+  const force = (1 - distance / radius) ** 2 * (node.group === 'face' ? faceLive : hairLive);
+  const nx = dx / Math.max(distance, 1);
+  const ny = dy / Math.max(distance, 1);
+
+  let hairAnchor = 1;
+  if (node.group === 'hair') {
+    const centerOffset = (node.x - mesh.width / 2) / mesh.width;
+    const hairOuter = Math.min(1, Math.max(0.18, (Math.abs(centerOffset) - 0.08) / 0.34));
+    hairAnchor = 0.18 + hairOuter * 0.82;
+  }
+  const mousePush = node.group === 'hair' ? 10 * hairAnchor : 5;
+  const panic = force * (node.group === 'hair' ? 1 : 0.75);
+  const panicShakeX =
+    Math.sin(now * 0.026 + node.phase * 7.1) * panic * (node.group === 'hair' ? 5.2 * hairAnchor : 2.1);
+  const panicShakeY =
+    Math.cos(now * 0.031 + node.phase * 5.9) * panic * (node.group === 'hair' ? 4.4 * hairAnchor : 1.8);
+
+  return {
+    dx: nx * force * mousePush + panicShakeX,
+    dy: ny * force * mousePush + panicShakeY,
+  };
+}
+
 export function projectFaceNode(
   mesh: FaceMesh,
   node: FaceNode,
@@ -514,8 +565,9 @@ export function projectFaceNode(
   pointer: { x: number; y: number; active: boolean },
   blinkStartedAt: number,
   liveMotion = 1,
+  layout?: FaceCanvasLayout,
 ): PositionedFaceNode {
-  const { scale, offsetX, offsetY } = layoutFaceOnCanvas(mesh, canvasW, canvasH, 0.88);
+  const { scale, offsetX, offsetY } = layout ?? layoutFaceOnCanvas(mesh, canvasW, canvasH, 0.88);
   const baseX = offsetX + node.x * scale;
   const baseY = offsetY + node.y * scale;
   const faceLive = node.group === 'face' ? liveMotion : 1;

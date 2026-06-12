@@ -5,7 +5,11 @@ export const profile = {
   location: 'Sokołów Podlaski, Polska',
   email: 'mikolaj.mikolajczuk3@gmail.com',
   phone: '+48 507 420 516',
-  github: 'https://github.com',
+  github: 'https://github.com/sprzedawcaMily',
+  githubHandle: 'sprzedawcaMily',
+  workMode: 'B2B / UoP · remote · hybryda',
+  english: 'Angielski · B2',
+  availability: 'Full-stack · mobile · AI',
   summary:
-    'Full-Stack Software Engineer specjalizujący się w skalowalnych architekturach w ekosystemie TypeScript (React, Node.js). Doświadczenie w optymalizacji pipeline’ów Big Data/ETL oraz integracji rozwiązań AI. Szukam wyzwań wymagających kreatywnego myślenia i nowoczesnych wzorców projektowych.',
+    'Full-Stack Software Engineer w ekosystemie TypeScript (React, React Native, Bun). Projektuję skalowalne architektury, pipeline’y danych transportowych (GTFS, ETL) i integracje AI w produkcji. Matura 2025, studia na Uczelni Łazarskiego.',
 } as const;

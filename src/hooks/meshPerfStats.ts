@@ -119,6 +119,9 @@ let lastTickActiveDots = 0;
 let lastScrollAt = 0;
 let consoleApiInstalled = false;
 let longTaskObserver: PerformanceObserver | null = null;
+let fileFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let sessionStartedAt = 0;
+const flushedSpikeWhen = new Set<number>();
 
 type RecentReveal = { label: string; at: number };
 const recentReveals: RecentReveal[] = [];
@@ -135,21 +138,177 @@ export function markScrollActivity() {
   lastScrollAt = performance.now();
 }
 
+let scrollIntentListenerAttached = false;
+
+/** Wheel / touch przed scroll — mesh ma ustąpić natychmiast, nie dopiero po evencie scroll. */
+export function attachScrollIntentTracking() {
+  if (scrollIntentListenerAttached || typeof window === 'undefined') return;
+  scrollIntentListenerAttached = true;
+  const bump = () => markScrollActivity();
+  window.addEventListener('wheel', bump, { passive: true });
+  window.addEventListener('touchmove', bump, { passive: true });
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      const k = e.key;
+      if (
+        k === 'ArrowUp'
+        || k === 'ArrowDown'
+        || k === 'PageUp'
+        || k === 'PageDown'
+        || k === 'Home'
+        || k === 'End'
+        || k === ' '
+      ) {
+        bump();
+      }
+    },
+    { passive: true },
+  );
+}
+
 export function markScrollReveal(label: string) {
   const at = performance.now();
   recentReveals.push({ label, at });
   if (recentReveals.length > 12) recentReveals.shift();
-  logPerfEvent('reveal: komponent w viewport', { label });
+}
+
+export function isScrollingRecently() {
+  return performance.now() - lastScrollAt < SCROLL_RECENT_MS;
 }
 
 function wasScrollingRecently() {
-  return performance.now() - lastScrollAt < SCROLL_RECENT_MS;
+  return isScrollingRecently();
 }
 
 function recentRevealHint(): string | undefined {
   const now = performance.now();
   const hit = recentReveals.find((r) => now - r.at < REVEAL_CORRELATE_MS);
   return hit?.label;
+}
+
+export type MeshPerfReport = {
+  type: 'report';
+  updatedAt: string;
+  session: {
+    startedAt: string;
+    url: string;
+    slow: boolean;
+    lite: boolean;
+    viewport: { w: number; h: number };
+    userAgent: string;
+  };
+  summary: {
+    spikeCount: number;
+    byKind: Record<MeshPerfSpikeKind, number>;
+    byZone: Record<string, number>;
+    byLabel: Array<{ label: string; count: number; maxMs: number }>;
+    fps: number;
+    peakFrameMs: number;
+    frameGapMs: number;
+    rafWorkMs: number;
+    meshTickMs: number;
+    zone: MeshZone | '—';
+    prewarmDone: boolean;
+  };
+  spikes: MeshPerfSpike[];
+  stats: MeshPerfStats;
+};
+
+function sessionMeta() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    startedAt: new Date(sessionStartedAt || Date.now()).toISOString(),
+    url: window.location.href,
+    slow: params.has('slow'),
+    lite: params.has('lite') || params.has('slow') || params.has('perf'),
+    viewport: { w: window.innerWidth, h: window.innerHeight },
+    userAgent: navigator.userAgent,
+  };
+}
+
+function buildLabelSummary(spikes: readonly MeshPerfSpike[]) {
+  const map = new Map<string, { count: number; maxMs: number }>();
+  for (const spike of spikes) {
+    const hit = map.get(spike.label) ?? { count: 0, maxMs: 0 };
+    hit.count += 1;
+    hit.maxMs = Math.max(hit.maxMs, spike.ms);
+    map.set(spike.label, hit);
+  }
+  return [...map.entries()]
+    .map(([label, data]) => ({ label, ...data }))
+    .sort((a, b) => b.maxMs - a.maxMs || b.count - a.count)
+    .slice(0, 20);
+}
+
+export function buildMeshPerfReport(): MeshPerfReport {
+  const spikes = [...spikeLog];
+  const byKind: Record<MeshPerfSpikeKind, number> = {
+    mesh: 0,
+    frameGap: 0,
+    longTask: 0,
+  };
+  const byZone: Record<string, number> = {};
+  for (const spike of spikes) {
+    byKind[spike.kind] += 1;
+    const zone = String(spike.zone);
+    byZone[zone] = (byZone[zone] ?? 0) + 1;
+  }
+
+  return {
+    type: 'report',
+    updatedAt: new Date().toISOString(),
+    session: sessionMeta(),
+    summary: {
+      spikeCount: spikes.length,
+      byKind,
+      byZone,
+      byLabel: buildLabelSummary(spikes),
+      fps: stats.fps,
+      peakFrameMs: stats.peakFrameMs,
+      frameGapMs: stats.frameGapMs,
+      rafWorkMs: stats.rafWorkMs,
+      meshTickMs: stats.meshTickMs,
+      zone: stats.zone,
+      prewarmDone: stats.prewarmDone,
+    },
+    spikes,
+    stats: readMeshPerfStats(),
+  };
+}
+
+async function postPerfPayload(payload: unknown) {
+  if (!import.meta.env.DEV || typeof fetch === 'undefined') return false;
+  try {
+    const res = await fetch('/__mesh-perf/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function flushSpikeToFile(spike: MeshPerfSpike) {
+  if (!import.meta.env.DEV || flushedSpikeWhen.has(spike.when)) return;
+  flushedSpikeWhen.add(spike.when);
+  await postPerfPayload({ type: 'spike', spike });
+}
+
+function scheduleReportFlush() {
+  if (!import.meta.env.DEV) return;
+  if (fileFlushTimer) return;
+  fileFlushTimer = setTimeout(() => {
+    fileFlushTimer = null;
+    void saveMeshPerfReport();
+  }, 3000);
+}
+
+export async function saveMeshPerfReport(): Promise<boolean> {
+  if (!import.meta.env.DEV) return false;
+  return postPerfPayload(buildMeshPerfReport());
 }
 
 export function dumpMeshPerfSpikes(): void {
@@ -173,6 +332,11 @@ export function dumpMeshPerfSpikes(): void {
     })),
   );
   console.groupEnd();
+  void saveMeshPerfReport().then((ok) => {
+    if (ok) {
+      console.info(`${LOG_PREFIX} zapisano raport → logs/mesh-perf-report.json`);
+    }
+  });
 }
 
 function installConsoleApi() {
@@ -183,9 +347,12 @@ function installConsoleApi() {
     spikes: () => spikeLog,
     dump: dumpMeshPerfSpikes,
     stats: readMeshPerfStats,
+    report: buildMeshPerfReport,
+    save: saveMeshPerfReport,
     clear: () => {
       spikeLog.length = 0;
       recentReveals.length = 0;
+      flushedSpikeWhen.clear();
       publishMeshPerfStats({ spikes: [], peakFrameMs: 0 });
       console.info(`${LOG_PREFIX} wyczyszczono log spike'ów`);
     },
@@ -198,7 +365,7 @@ function installConsoleApi() {
   });
 
   console.info(
-    `${LOG_PREFIX} logowanie aktywne — spike'i w konsoli, historia: window.__meshPerf.dump()`,
+    `${LOG_PREFIX} logowanie aktywne — dump: __meshPerf.dump() · plik: logs/mesh-perf-report.json`,
   );
 }
 
@@ -284,6 +451,8 @@ function pushSpike(spike: MeshPerfSpike) {
   spikeLog.unshift(spike);
   if (spikeLog.length > SPIKE_LOG_MAX) spikeLog.pop();
   logSpikeToConsole(spike);
+  void flushSpikeToFile(spike);
+  scheduleReportFlush();
   const spikes = [spike, ...stats.spikes].slice(0, SPIKE_HISTORY);
   publishMeshPerfStats({
     spikes,
@@ -356,6 +525,11 @@ function recordSpike(rafWorkMs: number, frameGapMs: number) {
 
   const gapDominant =
     gapSpike && frameGapMs > Math.max(rafWorkMs, tickMs) + 10;
+
+  /* Pauza RAF podczas scrolla — gap to czas scrolla, nie blokada wątku. */
+  if (gapDominant && frameGapMs > 220 && rafWorkMs < 56 && tickMs < 56) {
+    return;
+  }
 
   if (gapDominant) {
     const scrolling = wasScrollingRecently();
@@ -446,14 +620,18 @@ export function subscribeMeshPerfStats(fn: () => void): () => void {
 }
 
 export function isPerfMonitorEnabled() {
-  if (import.meta.env.DEV) return true;
   if (typeof window === 'undefined') return false;
-  return new URLSearchParams(window.location.search).has('perf');
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('perf')) return true;
+  if (import.meta.env.DEV) return true;
+  return false;
 }
 
 /** Wywołaj raz przy starcie — udostępnia `window.__meshPerf` i long-task observer. */
 export function initMeshPerfLogging() {
   if (!isPerfMonitorEnabled()) return;
+  sessionStartedAt = Date.now();
   installConsoleApi();
   startLongTaskObserver();
+  void saveMeshPerfReport();
 }

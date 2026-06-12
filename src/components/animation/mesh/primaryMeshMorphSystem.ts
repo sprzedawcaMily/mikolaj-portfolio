@@ -1,6 +1,6 @@
 import { clamp01, easeSmoothStep, layoutMeshOnCanvas, type SvgMesh } from '@/components/animation/mesh/svgMesh';
 
-/** Te same progi co twarz → strzałka w AnimatedNeonPortrait. */
+/** Te same progi co morph warstw w meshScrollEngine. */
 export const MORPH_WIRE_TARGET_START = 0.12;
 export const MORPH_WIRE_SOURCE_FADE_END = 0.26;
 export const MORPH_ACTIVE = 0.001;

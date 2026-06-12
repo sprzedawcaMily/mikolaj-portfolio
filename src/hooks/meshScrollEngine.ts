@@ -3,14 +3,17 @@
  * Zatrzymanie scrolla = ten sam cel co w focusie, kropki dolecają same.
  */
 
+import { EYE_MESH_STAGE_INSET } from '@/components/animation/parseKamochiEyeSvg';
+import { readMorphZoneLock } from '@/hooks/meshZoneStore';
+
 export const PIVOT_Y_RATIO = 0.1;
 export const AIM_GAP_PX = 18;
 export const ARROW_PIN_LIFT_PX = 68;
 export const CANVAS_BOTTOM_PAD = 48;
 export const AIM_X_RATIO = 0.58;
 export const ARROW_STAGE_EXTRA_W = 96;
-export const MESH_PORTAL_ID = 'mesh-portal-root';
-export const MESH_LAYER_ID = 'mesh-floating-layer';
+export const MESH_LAYER_ID = 'mesh-flying-layer';
+export const FLYING_MESH_CANVAS_ID = 'flying-mesh-canvas';
 export const HERO_MESH_ANCHOR_ID = 'hero-mesh-anchor';
 export const PALETTE_MESH_ANCHOR_ID = 'palette-mesh-anchor';
 export const TRANSITRANK_MESH_ANCHOR_ID = 'transit-rank-mesh-anchor';
@@ -66,58 +69,89 @@ export function segmentMid(zone: MeshZone): number | null {
   }
 }
 
-function resolveCardZone(probeY: number): MeshZone {
-  const cards: { zone: MeshZone; id: string }[] = [
+/** Najbliższy anchor kształtu — projekty i oczy na tych samych zasadach co ring/loupe. */
+function resolveClosestShapeZone(probeY: number): MeshZone {
+  const shapes: { zone: MeshZone; id: string }[] = [
     { zone: 'bus', id: TRANSITRANK_MESH_ANCHOR_ID },
     { zone: 'fork', id: FORKFULL_MESH_ANCHOR_ID },
     { zone: 'spray', id: KAMOCHI_MESH_ANCHOR_ID },
     { zone: 'loupe', id: LEGITCHECK_MESH_ANCHOR_ID },
     { zone: 'ring', id: STYLERANK_MESH_ANCHOR_ID },
+    { zone: 'careerEye', id: EXPERIENCE_MESH_ANCHOR_ID },
+    { zone: 'skillsEye', id: SKILLS_MESH_ANCHOR_ID },
   ];
 
   let best: MeshZone = 'bus';
   let bestDist = Number.POSITIVE_INFINITY;
-  for (const card of cards) {
-    const mid = readDocMid(card.id);
+  for (const shape of shapes) {
+    const mid = readDocMid(shape.id);
     if (mid == null) continue;
     const dist = Math.abs(probeY - mid);
     if (dist < bestDist) {
       bestDist = dist;
-      best = card.zone;
+      best = shape.zone;
     }
   }
   return best;
 }
 
-function resolvePostProjectsZone(probeY: number): MeshZone {
-  const experienceMid = readDocMid(EXPERIENCE_MESH_ANCHOR_ID);
-  const skillsMid = readDocMid(SKILLS_MESH_ANCHOR_ID);
-  const experienceTop = readDocTop('doswiadczenie');
+function maxScrollY(vh = window.innerHeight) {
+  return Math.max(
+    0,
+    document.documentElement.scrollHeight - vh,
+    document.body.scrollHeight - vh,
+  );
+}
 
-  if (experienceMid == null && skillsMid == null) return resolveCardZone(probeY);
+/** Kontakt w dolnej części okna — tylko gdy scroll nie dociera (zoom out) lub jesteś przy dole strony. */
+function contactSectionVisibleInViewport(vh: number): boolean {
+  const scrollMax = maxScrollY(vh);
+  const atDocBottom = scrollMax < 96 || window.scrollY >= scrollMax - 48;
+  if (!atDocBottom) return false;
 
-  if (experienceTop != null && probeY < experienceTop + 80) {
-    return resolveCardZone(probeY);
+  const el = document.getElementById('kontakt');
+  if (!el) return false;
+  const rect = el.getBoundingClientRect();
+  const visibleH = Math.min(rect.bottom, vh) - Math.max(rect.top, 0);
+  if (visibleH < 56) return false;
+  const centerY = rect.top + rect.height * 0.38;
+  return centerY >= vh * 0.36;
+}
+
+/**
+ * Punkt próbkowania scrolla — przy zoom out cała strona mieści się w viewport
+ * i klasyczny probe (44% wysokości okna) zostaje w górnej połowie dokumentu.
+ */
+function readViewportProbeY(vh = window.innerHeight): number {
+  const scrollMax = maxScrollY(vh);
+  const docH = Math.max(
+    document.documentElement.scrollHeight,
+    document.body.scrollHeight,
+  );
+
+  if (scrollMax < 96) {
+    return Math.max(docH * 0.82, docH - vh * 0.16);
   }
+
+  if (window.scrollY >= scrollMax - 64) {
+    return window.scrollY + vh * 0.68;
+  }
+
+  return window.scrollY + vh * VIEW_PROBE_RATIO;
+}
+
+function resolvePostProjectsZone(probeY: number, vh: number): MeshZone {
+  if (contactSectionVisibleInViewport(vh)) return 'contactArrow';
 
   const contactTop = readDocTop('kontakt');
   if (contactTop != null && probeY >= contactTop + 40) {
     return 'contactArrow';
   }
-
-  if (experienceMid != null && skillsMid != null) {
-    const boundary = experienceMid + (skillsMid - experienceMid) * 0.48;
-    if (probeY >= boundary) return 'skillsEye';
-    return 'careerEye';
-  }
-
-  if (skillsMid != null && probeY >= skillsMid + 32) return 'skillsEye';
-  if (experienceMid != null && probeY >= experienceMid + 48) return 'careerEye';
-  return resolveCardZone(probeY);
+  return resolveClosestShapeZone(probeY);
 }
 
 /** Scroll wybiera segment — nie procent drogi, tylko strefa viewportu. */
-function resolveSegmentZone(probeY: number): MeshZone {
+function resolveSegmentZone(probeY: number, vh = window.innerHeight): MeshZone {
   const paletteTop = readDocTop('studio-palety');
   const projectsTop = readDocTop('projekty');
 
@@ -127,39 +161,39 @@ function resolveSegmentZone(probeY: number): MeshZone {
   if (paletteTop == null || !paletteAnchor || probeY < paletteTop - 96) {
     return 'hero';
   }
-  if (projectsTop != null && probeY >= projectsTop + 120) return resolvePostProjectsZone(probeY);
+  if (projectsTop != null && probeY >= projectsTop + 120) {
+    return resolvePostProjectsZone(probeY, vh);
+  }
 
-  const paletteMid = readDocMid('studio-palety');
-  if (paletteMid != null && probeY > paletteMid + 120) return resolvePostProjectsZone(probeY);
+  const studioBottom = readDocBottom('studio-palety');
+  if (studioBottom != null && probeY > studioBottom - 96) {
+    return resolvePostProjectsZone(probeY, vh);
+  }
 
   return 'palette';
 }
 
 /** Dyskretna strefa z histerezą — scroll wybiera cel, nie % morphu. */
 export function resolveActiveMeshZone(vh = window.innerHeight): MeshZone {
+  const locked = readMorphZoneLock();
+  if (locked) return locked;
   return resolveActiveZoneWithHysteresis(vh);
 }
 
-/** Morph oka startuje dopiero gdy slot jest realnie w viewport. */
-export function isEyeAnchorInView(zone: MeshZone, vh = window.innerHeight): boolean {
-  if (zone !== 'careerEye' && zone !== 'skillsEye') return true;
-  const id = zone === 'careerEye' ? EXPERIENCE_MESH_ANCHOR_ID : SKILLS_MESH_ANCHOR_ID;
-  const el = document.getElementById(id);
-  if (!el) return true;
-  const rect = el.getBoundingClientRect();
-  const visible = Math.min(rect.bottom, vh) - Math.max(rect.top, 0);
-  return visible >= Math.min(rect.height * 0.3, vh * 0.24);
+/** Utrzymuje histerezę zgodną z aktywnym morph — bez oscylacji przy odwróceniu scrolla. */
+export function pinCommittedMeshZone(zone: MeshZone) {
+  committedZone = zone;
 }
 
 /** Po zoomie / resize — strefa od nowa ze scrolla (bez zaciętej histerezy). */
 export function refreshMeshZoneAfterViewportChange(vh = window.innerHeight) {
   invalidateZonePinsCache();
-  committedZone = resolveSegmentZone(window.scrollY + vh * VIEW_PROBE_RATIO);
+  committedZone = resolveSegmentZone(readViewportProbeY(vh), vh);
 }
 
 function resolveActiveZoneWithHysteresis(vh: number): MeshZone {
-  const probeY = window.scrollY + vh * VIEW_PROBE_RATIO;
-  const candidate = resolveSegmentZone(probeY);
+  const probeY = readViewportProbeY(vh);
+  const candidate = resolveSegmentZone(probeY, vh);
 
   if (candidate === committedZone) return committedZone;
 
@@ -298,6 +332,12 @@ function readDocTop(id: string) {
   const el = document.getElementById(id);
   if (!el) return null;
   return el.getBoundingClientRect().top + window.scrollY;
+}
+
+function readDocBottom(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  return el.getBoundingClientRect().bottom + window.scrollY;
 }
 
 export type MeshPinState = {
@@ -656,9 +696,8 @@ function eyePinFromAnchor(
   _vh: number,
   flipX: boolean,
 ): MeshPinState {
-  const inset = 6;
-  let stageW = Math.max(240, anchorRect.width - inset * 2);
-  let stageH = Math.max(180, anchorRect.height - inset * 2);
+  let stageW = Math.max(240, anchorRect.width - EYE_MESH_STAGE_INSET * 2);
+  let stageH = Math.max(180, anchorRect.height - EYE_MESH_STAGE_INSET * 2);
   const aspect = EYE_MESH_ASPECT;
   if (stageW / stageH > aspect) {
     stageW = stageH * aspect;
@@ -786,9 +825,9 @@ export function pinForZonePins(pins: ZonePins, zone: MeshZone): MeshPinState {
     case 'ring':
       return pins.ring ?? pins.loupe ?? pins.hero;
     case 'careerEye':
-      return pins.careerEye ?? pins.ring ?? pins.hero;
+      return pins.careerEye ?? pins.hero;
     case 'skillsEye':
-      return pins.skillsEye ?? pins.careerEye ?? pins.ring ?? pins.hero;
+      return pins.skillsEye ?? pins.careerEye ?? pins.hero;
     case 'contactArrow':
       return pins.contactArrow ?? pins.skillsEye ?? pins.careerEye ?? pins.hero;
   }
@@ -851,7 +890,7 @@ export type ScrollBlend = {
 
 /** Płynny blend stref na podstawie scrolla — kropki jadą w stronę docelowego kształtu. */
 export function resolveScrollBlend(vh: number): ScrollBlend {
-  const probeY = window.scrollY + vh * VIEW_PROBE_RATIO;
+  const probeY = readViewportProbeY(vh);
   const mids: { zone: MeshZone; y: number }[] = [];
 
   for (const zone of ZONE_ORDER) {

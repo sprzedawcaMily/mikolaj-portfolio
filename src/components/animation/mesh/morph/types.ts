@@ -11,12 +11,22 @@ export type MorphEdge = {
   group: 'face' | 'hair' | 'reflector' | 'palette';
 };
 
+export type EyeWhiteHull = {
+  path: string;
+  points: { x: number; y: number }[];
+};
+
 export type MeshBundle = {
   faceMesh: FaceMesh;
   zoneMeshes: Partial<Record<MeshZone, SvgMesh>>;
+  /** Ścieżka wypełnienia #D9D9D9 — deformacja z dryfem kropek obrysu. */
+  eyeWhiteHull: EyeWhiteHull | null;
+  /** Pozostałe strefy (projekty, oko, strzałka) — parsowane w tle po starcie. */
+  zonesReady?: boolean;
+  onZonesExpanded?: (fn: () => void) => () => void;
 };
 
-/** Stan strefy po zatrzymaniu morphu lub na hero. */
+/** Snapshot strefy — mapowanie atlasu na cele morphu. */
 export type ZoneSnapshot = {
   zone: MeshZone;
   goals: Map<number, NormPt>;
@@ -28,25 +38,3 @@ export type ZoneSnapshot = {
   layoutW: number;
   layoutH: number;
 };
-
-/** Snapshot źródła na start sesji morphu. */
-export type SourceSnapshot = {
-  goals: Map<number, NormPt>;
-  mappedIds: Set<number>;
-  edges: MorphEdge[];
-  supplementHostEdges: MorphEdge[];
-  splits: Map<number, NormPt[]>;
-  layoutScale: number;
-  layoutW: number;
-  layoutH: number;
-};
-
-/** @deprecated użyj MorphFlightSession */
-export type MorphSessionCtx = {
-  startW: number;
-  startH: number;
-  frozenHostPx: Map<number, PixelPt>;
-  frozenSplitPx: Map<string, PixelPt>;
-};
-
-export type DotBody = { x: number; y: number; vx: number; vy: number };

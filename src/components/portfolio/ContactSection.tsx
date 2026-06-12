@@ -1,5 +1,5 @@
 import { DotReveal } from '@/components/animation/DotReveal';
-import { Button, Card, SectionHeading } from '@/components/emds';
+import { Button, Card, GitHubIcon, SectionHeading } from '@/components/emds';
 import { profile } from '@/data/profile';
 import { CONTACT_CTA_ANCHOR_ID } from '@/hooks/meshScrollEngine';
 import styles from './ContactSection.module.css';
@@ -12,7 +12,7 @@ export function ContactSection() {
           <SectionHeading
             label="Kontakt"
             title="Porozmawiajmy o współpracy"
-            subtitle="Otwarty na projekty full-stack, mobile i architekturę z elementem AI."
+            subtitle={profile.availability}
           />
         </DotReveal>
         <DotReveal delay={0.1}>
@@ -30,8 +30,23 @@ export function ContactSection() {
               </a>
             </div>
             <div className={styles.row}>
+              <span className={styles.label}>GitHub</span>
+              <a
+                href={profile.github}
+                className={styles.value}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                github.com/{profile.githubHandle}
+              </a>
+            </div>
+            <div className={styles.row}>
               <span className={styles.label}>Lokalizacja</span>
               <span className={styles.value}>{profile.location}</span>
+            </div>
+            <div className={styles.row}>
+              <span className={styles.label}>Forma pracy</span>
+              <span className={styles.value}>{profile.workMode}</span>
             </div>
             <div className={styles.actions}>
               <Button
@@ -41,6 +56,15 @@ export function ContactSection() {
               >
                 Napisz wiadomość
               </Button>
+              <a
+                href={profile.github}
+                className={styles.secondaryLink}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <GitHubIcon size={16} />
+                Zobacz GitHub
+              </a>
             </div>
           </Card>
         </DotReveal>

@@ -24,6 +24,9 @@
 }
 
 .label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.2em;
@@ -32,6 +35,9 @@
 }
 
 .value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 1rem;
   font-weight: 600;
   color: var(--text);
@@ -44,6 +50,25 @@
 
 .actions {
   margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.secondaryLink {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 12px 4px;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.secondaryLink:hover {
+  color: var(--text);
 }
 
 @media (min-width: 720px) {

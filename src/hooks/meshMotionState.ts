@@ -19,6 +19,8 @@ export type MeshMotionSnapshot = {
   morphBuildT: number;
   /** Tęczówka SVG — przyczepiona do wylądowanych kropek mesha. */
   eyeFrame: EyeMeshFrame;
+  /** Białe tło #D9D9D9 zsynchronizowane z dryfem kropek obrysu. */
+  eyeHullPathD: string;
   /** Tęczówka + źrenica widoczne dopiero po pierwszym mrugnięciu. */
   eyeIrisUnlocked: boolean;
 };
@@ -31,6 +33,7 @@ let snapshot: MeshMotionSnapshot = {
   scrolling: false,
   morphBuildT: 1,
   eyeFrame: IDLE_EYE_FRAME,
+  eyeHullPathD: '',
   eyeIrisUnlocked: false,
 };
 
@@ -54,6 +57,7 @@ export function publishMeshMotionState(next: Partial<MeshMotionSnapshot>) {
     && prev.eyeFrame.scaleX === snapshot.eyeFrame.scaleX
     && prev.eyeFrame.scaleY === snapshot.eyeFrame.scaleY
     && prev.eyeFrame.ready === snapshot.eyeFrame.ready
+    && prev.eyeHullPathD === snapshot.eyeHullPathD
     && prev.eyeIrisUnlocked === snapshot.eyeIrisUnlocked
   ) {
     return;

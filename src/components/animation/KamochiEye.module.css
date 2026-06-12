@@ -24,6 +24,15 @@
   translate: 0 0;
   filter: none;
   transition: none;
+  contain: layout style;
+}
+
+.irisOnly .irisTrack {
+  will-change: transform;
+}
+
+.irisOnly .redLayer {
+  filter: none;
 }
 
 .revealed {
@@ -65,12 +74,19 @@
   stroke-width: 2px;
 }
 
+.pupilLayer {
+  pointer-events: none;
+}
+
 .pupilDot {
-  fill: rgba(255, 255, 255, 0.96);
+  fill: rgba(255, 255, 255, 0.98);
+  stroke: rgba(220, 230, 255, 0.55);
+  stroke-width: 0.75px;
 }
 
 .pupilLine {
-  stroke: rgba(255, 255, 255, 0.9);
+  stroke: rgba(255, 255, 255, 0.96);
+  stroke-width: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

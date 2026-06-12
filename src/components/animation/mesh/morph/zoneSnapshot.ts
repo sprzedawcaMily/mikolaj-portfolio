@@ -1,7 +1,7 @@
 import type { MeshZone } from '@/hooks/meshScrollEngine';
 import type { FaceMesh } from '@/components/animation/mesh/faceMesh';
 import { zoneLayout, type DotAtlas } from '@/components/animation/mesh/meshDotAtlas';
-import type { MorphEdge, NormPt, SourceSnapshot, ZoneSnapshot } from './types';
+import type { MorphEdge, NormPt, ZoneSnapshot } from './types';
 
 export function edgeGroupLookup(faceMesh: FaceMesh) {
   const map = new Map<number, 'face' | 'hair'>();
@@ -53,29 +53,5 @@ export function snapshotFromZoneLayout(
     layoutScale: layout.layoutScale,
     layoutW,
     layoutH,
-  };
-}
-
-export function heroSnapshot(
-  atlas: DotAtlas,
-  faceMesh: FaceMesh,
-  layoutW: number,
-  layoutH: number,
-): ZoneSnapshot | null {
-  return snapshotFromZoneLayout('hero', atlas, faceMesh, layoutW, layoutH);
-}
-
-export function captureSourceFromSnapshot(prev: ZoneSnapshot): SourceSnapshot {
-  return {
-    goals: new Map(prev.goals),
-    mappedIds: new Set(prev.mappedIds),
-    edges: prev.edges,
-    supplementHostEdges: prev.supplementHostEdges,
-    splits: new Map(
-      [...prev.splits.entries()].map(([id, pts]) => [id, pts.map((p) => ({ ...p }))]),
-    ),
-    layoutScale: prev.layoutScale,
-    layoutW: prev.layoutW,
-    layoutH: prev.layoutH,
   };
 }

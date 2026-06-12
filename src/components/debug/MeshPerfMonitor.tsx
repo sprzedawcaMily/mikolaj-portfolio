@@ -167,7 +167,7 @@ export function MeshPerfMonitor() {
       <p className={styles.spikeTitle}>Spiki (&gt;48 ms)</p>
       <ul data-k="spikes" className={styles.spikeList} />
       <p className={styles.hint}>
-        GAP = lag poza meshem (React/layout) · <code>__meshPerf.dump()</code>
+        GAP = React/layout · auto-lite na słabszym sprzęcie · <code>?full=1</code> · <code>?lite=1</code>
       </p>
     </div>
   );

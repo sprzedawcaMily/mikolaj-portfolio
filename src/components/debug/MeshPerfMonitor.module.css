@@ -17,6 +17,10 @@
   user-select: none;
 }
 
+.panel * {
+  pointer-events: none;
+}
+
 .title {
   margin: 0 0 6px;
   font-size: 10px;

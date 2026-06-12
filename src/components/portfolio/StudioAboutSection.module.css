@@ -1,0 +1,125 @@
+.zone {
+  position: relative;
+  z-index: 2;
+  margin-top: -40px;
+  padding: 120px 24px 64px;
+  overflow: visible;
+}
+
+.inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
+}
+
+.meshWrap {
+  position: absolute;
+  left: 92%;
+  top: 32px;
+  width: min(260px, 28vw);
+  height: min(290px, 32vh);
+  transform: translateX(-30%);
+  pointer-events: none;
+  z-index: 1;
+  overflow: visible;
+}
+
+.meshSlot {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.aboutBlock {
+  position: relative;
+  z-index: 2;
+}
+
+.panel {
+  position: relative;
+}
+
+.paletteBridge {
+  position: relative;
+  z-index: 3;
+  margin-top: 20px;
+}
+
+.paletteCard {
+  position: relative;
+  z-index: 5;
+  padding: 18px 20px 22px;
+  background: color-mix(in srgb, var(--surface) 24%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 28%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.paletteLabel {
+  margin-bottom: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+  margin-top: 8px;
+}
+
+.statLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.statValue {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.statLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--accent);
+  word-break: break-word;
+}
+
+.statLink:hover {
+  color: var(--text);
+}
+
+@media (min-width: 720px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .zone {
+    padding: 140px 32px 80px;
+  }
+
+  .meshWrap {
+    left: 94%;
+    top: 40px;
+    width: min(280px, 26vw);
+    height: min(310px, 34vh);
+    transform: translateX(-26%);
+  }
+
+  .paletteCard {
+    padding: 20px 28px 24px;
+  }
+}

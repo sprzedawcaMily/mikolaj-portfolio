@@ -1,52 +1,41 @@
 ---
-description: Invariants scroll-morph mesh (twarz→strzałka→projekty) — nie psuj bez powodu
-globs: src/hooks/usePortraitScrollMorph.ts,src/components/animation/AnimatedNeonPortrait.tsx
+description: Invariants scroll-morph mesh — nie psuj bez powodu
+globs: src/components/animation/flyingDotEngine.ts,src/hooks/meshScrollEngine.ts,src/components/animation/FlyingMeshDots.tsx
 alwaysApply: false
 ---
 
 # Scroll morph — stabilność animacji
 
+## Architektura (aktualna)
+
+- **Warstwa:** `FlyingMeshDots` (`#mesh-flying-layer`, canvas `#flying-mesh-canvas`)
+- **Silnik:** `flyingDotEngine.ts` — lot kropek, paint canvas, morph między strefami
+- **Scroll / strefy:** `meshScrollEngine.ts` — dyskretne strefy z histerezą
+- **Pętla:** `meshAnimationLoop.ts` — jeden RAF
+
 ## Zasada główna
 
-**Scroll tylko uruchamia animację. Progress idzie w czasie (lerp + lock), nie w sync ze scroll position** (wyjątek: pin layout nadal od scrolla sekcji palety).
+**Scroll wybiera strefę docelową. Kropki lecą wspólnym tempem morphu — nie mapuj progressu 1:1 na scroll position** (wyjątek: pin layout palety od anchorów DOM).
 
-## Łańcuch stage
+## Łańcuch stref
 
-`hero → palette → transit → fork → spray`
+`hero → palette → bus → fork → spray → loupe → ring → careerEye → skillsEye → contactArrow`
 
-## Locki animacji (nie przerywać mid-flight)
+## Nie psuj
 
-| Lock | Plik | Zachowanie |
-|------|------|------------|
-| `paletteAnimLockRef` | morph / demorph | Twarz↔strzałka do końca po triggerze scrolla |
-| `sprayAnimLockRef` | morph / demorph | Widelec↔sprej do końca |
-| `sprayScrollUpLatchRef` | kierunek | Demorph spreju tylko przy scrollu w górę |
+- **Histereza stref** (`committedZone`, `ZONE_HYSTERESIS_PX`) — bez oscylacji przy odwróceniu scrolla
+- **`scrollLite`** — podczas scrolla nie przełączaj strefy morphu w połowie lotu; `catchUp` po zatrzymaniu
+- **`setMorphZoneLock`** — blokada flipu strefy w trakcie morphu
+- **Reflektory** (dysza spreju, lampy autobusu) — `snapReflectorForMorph` + `reflectorIgnite`; nie pokazuj przed zakończeniem lotu pozostałych kropek
+- **Spray footprint** — czyść rozszerzony clip canvasu (`sprayPaintMargin`), inaczej zostają kolorowe artefakty nad kartą
+- **Ring shimmer** — tylko kropki (`paintRingCanvasDots`), nie kreski
 
-**Nigdy** nie nadpisuj locka `morph` przez scroll heurystyki w tej samej klatce.
+## Pliki kluczowe
 
-## Reset / hero
-
-- `pageTopZone` + `applyHeroFrame` — **tylko gdy wszystkie animy idle** (twarz, transit, fork, spray).
-- `canHardReset` — **bez** `atPageTop` OR; wymaga `animProgress <= MORPH_IDLE`.
-- Przejście na `hero` z `animProgress > 0` → ustaw `paletteAnimLockRef = 'demorph'`, nie resetuj `animProgress`.
-
-## Demorph sprej → widelec
-
-- Wymaga scrollu **w górę** (`sprayScrollIntentUp`), nie samej pozycji Kamochi.
-- Albo widoczna karta Forkfull, albo Kamochi poza strefą focusu w dół.
-- **Nie** demorph gdy obie karty widoczne przy scrollu w dół.
-
-## Render palety
-
-- `paletteOnlyMorph` / face-arrow: wyłącz `busRender`, `forkRender`, `sprayRender`.
-- `setMorphTarget`: hero **i** palette używają `animProgress` (demorph strzałka→twarz).
-
-## Canvas (`AnimatedNeonPortrait`)
-
-- `externalMorphRef` — podążaj z lerpem (`follow`), nie przypisuj na sztywno (batch React).
-- Nie usuwaj `paintFaceToSprayMorph` / map fork→spray bez weryfikacji węzłów SVG.
-
-## Szybki scroll
-
-- `scrollJump` — snap project anims do stage, **nie** `animProgress = scrollT` na palecie.
-- Przy jump na hero z aktywną strzałką → demorph, nie teleport.
+| Plik | Rola |
+|------|------|
+| `flyingDotEngine.ts` | Pool, sync celów, paint, efekty stref |
+| `meshScrollEngine.ts` | Anchory kart, `resolveActiveMeshZone`, piny |
+| `loadMeshBundle.ts` | SVG → mesh; strefy projektów deferred |
+| `meshDotAtlas.ts` | Layout kropek per strefa |
+| `meshPerfMode.ts` | lite / slow / full FPS |

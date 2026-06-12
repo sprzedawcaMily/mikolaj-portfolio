@@ -17,21 +17,34 @@ globalThis.DOMParser = class DOMParser {
   }
 };
 
+globalThis.XMLSerializer = class XMLSerializer {
+  serializeToString(node) {
+    return node.outerHTML ?? node.toString();
+  }
+};
+
 const { parseFaceMesh } = await import('../src/components/animation/mesh/faceMesh.ts');
 const { parseSvgMesh } = await import('../src/components/animation/mesh/svgMesh.ts');
+const { parsePaletteSvgMesh } = await import('../src/components/animation/mesh/parsePaletteMesh.ts');
 const { buildDotAtlas } = await import('../src/components/animation/mesh/meshDotAtlas.ts');
 const { snapshotFromZoneLayout } = await import('../src/components/animation/mesh/morph/zoneSnapshot.ts');
-const { zoneDotCount } = await import('../src/components/animation/mesh/morph/dotCatalog.ts');
 const { ZONE_ORDER } = await import('../src/hooks/meshScrollEngine.ts');
+const { MESH_ASSETS } = await import('../src/data/meshAssets.ts');
 
-const SOURCES = {
-  hero: null,
-  palette: '/images/profile/Group%201.svg?v=arrow-mesh-5',
-  bus: '/images/transitrank/autobus.svg?v=bus-mesh-15',
-  fork: '/images/forkfull/widelec.svg?v=fork-mesh-5',
-  spray: '/images/kamochi/sprej.svg?v=spray-mesh-4',
-  loupe: '/images/kamochi/lupa.svg?v=loupe-mesh-5',
-  ring: '/images/kamochi/pierscionek.svg?v=ring-mesh-4',
+function zoneDotCount(snap) {
+  let count = snap.mappedIds.size;
+  for (const pts of snap.splits.values()) count += pts.length;
+  return count;
+}
+
+/** Strefy z osobnym SVG (hero = faceMesh z Group 5). */
+const ZONE_SOURCES = {
+  palette: MESH_ASSETS.palette,
+  bus: MESH_ASSETS.bus,
+  fork: MESH_ASSETS.fork,
+  spray: MESH_ASSETS.spray,
+  loupe: MESH_ASSETS.loupe,
+  ring: MESH_ASSETS.ring,
 };
 
 function readSvg(rel) {
@@ -39,14 +52,14 @@ function readSvg(rel) {
   return readFileSync(path, 'utf8');
 }
 
-const faceSvg = readSvg('/images/profile/Group%205.svg?v=svg-mesh-5');
-const faceMesh = parseFaceMesh(faceSvg);
+const faceMesh = parseFaceMesh(readSvg(MESH_ASSETS.hero));
 
 const zoneMeshes = {};
-for (const [zone, rel] of Object.entries(SOURCES)) {
-  if (!rel || zone === 'hero') continue;
-  const strict = zone !== 'fork';
-  zoneMeshes[zone] = parseSvgMesh(readSvg(rel), { strictLineSnap: strict });
+for (const [zone, rel] of Object.entries(ZONE_SOURCES)) {
+  const svg = readSvg(rel);
+  zoneMeshes[zone] = zone === 'palette'
+    ? parsePaletteSvgMesh(svg)
+    : parseSvgMesh(svg, { strictLineSnap: zone !== 'fork' });
 }
 
 const canvasW = 420;
@@ -62,8 +75,8 @@ for (const zone of ZONE_ORDER) {
 rows.sort((a, b) => b.count - a.count);
 const max = rows[0]?.count ?? 0;
 
-console.log('\nLiczba kropek per obrazek (hosty + supplementy, numeracja od góry):\n');
+console.log('\nLiczba kropek per strefa (hosty + supplementy):\n');
 for (const row of rows) {
-  console.log(`  ${row.zone.padEnd(8)} ${row.count}`);
+  console.log(`  ${row.zone.padEnd(12)} ${row.count}`);
 }
-console.log(`\n  max      ${max}  → morph pary #1..#${max}\n`);
+console.log(`\n  max          ${max}  → morph pary #1..#${max}\n`);

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Badge } from '@/components/emds';
+import { Badge, GitHubIcon } from '@/components/emds';
 import { profile } from '@/data/profile';
 import { HERO_MESH_ANCHOR_ID } from '@/hooks/meshScrollEngine';
 import styles from './Hero.module.css';
@@ -8,7 +8,7 @@ const skillStats = [
   { label: 'Frontend', value: 97 },
   { label: 'Backend', value: 94 },
   { label: 'Mobile', value: 96 },
-  { label: 'Big Data', value: 90 },
+  { label: 'Data / ETL', value: 90 },
 ];
 
 export function Hero() {
@@ -24,11 +24,11 @@ export function Hero() {
           <Badge tone="accent">Full-Stack · TypeScript · Mobile</Badge>
           <p className={styles.greeting}>Player select</p>
           <h1 className={styles.name}>{profile.name}</h1>
-          <p className={styles.characterClass}>Class: {profile.title} · Big Data</p>
+          <p className={styles.characterClass}>Class: {profile.title} · GTFS / AI</p>
           <p className={styles.summary}>
             Wybierasz Mikołaja: inżyniera full-stack, który projektuje skalowalne
-            architektury w TypeScript, optymalizuje pipeline’y danych i dowozi produkty
-            od backendu po aplikacje mobilne.
+            architektury w TypeScript, buduje pipeline’y danych transportowych i dowozi
+            produkty od backendu po aplikacje mobilne z AI w produkcji.
           </p>
 
           <div className={styles.skillPanel} aria-label="Poziom umiejętności postaci">
@@ -53,6 +53,15 @@ export function Hero() {
             </a>
             <a href="#kontakt" className={styles.ctaSecondary}>
               Zatwierdź
+            </a>
+            <a
+              href={profile.github}
+              className={styles.ctaSecondary}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <GitHubIcon size={16} />
+              GitHub
             </a>
           </div>
         </motion.div>
