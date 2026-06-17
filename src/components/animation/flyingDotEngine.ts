@@ -998,7 +998,9 @@ function syncRigidLayoutFollow(
       dot.faceTgtOx = 0;
       dot.faceTgtOy = 0;
     }
-    dot.idleMotionBlend = 1;
+    if (zone !== 'contactArrow') {
+      dot.idleMotionBlend = 1;
+    }
   }
 }
 
@@ -2507,7 +2509,7 @@ function paintSprayBursts(
   ctx.globalAlpha = 1;
 }
 
-/** Oddech w stronę przycisku — tylko po morphu, bez zmiany layoutu / obrotu. */
+/** Oddech w stronę przycisku — rampuje z postępem budowy, bez skoku po morphu. */
 function applyContactArrowPoint(
   pool: FlyingPool,
   zone: MeshZone,
@@ -2516,15 +2518,15 @@ function applyContactArrowPoint(
 ) {
   if (zone !== 'contactArrow') return;
 
-  for (const dot of pool.dots.values()) {
-    dot.displayOx = 0;
-    dot.displayOy = 0;
-  }
-  if (!settled) return;
-
   const slotEl = document.getElementById(CONTACT_MESH_ANCHOR_ID);
   const ctaEl = document.getElementById(CONTACT_CTA_ANCHOR_ID);
-  if (!slotEl || !ctaEl) return;
+  if (!slotEl || !ctaEl) {
+    for (const dot of pool.dots.values()) {
+      dot.displayOx = 0;
+      dot.displayOy = 0;
+    }
+    return;
+  }
 
   const slot = slotEl.getBoundingClientRect();
   const cta = ctaEl.getBoundingClientRect();
@@ -2542,11 +2544,13 @@ function applyContactArrowPoint(
 
   const breathe = 0.5 + 0.5 * Math.sin(now * 0.0025);
   const push = 8 + breathe * 20;
+  const buildGate = settled ? 1 : morphBuildProgress(pool);
 
   for (const dot of pool.dots.values()) {
     if (dot.alpha < 0.06 && dot.tgtAlpha < 0.06) continue;
-    dot.displayOx = dx * push * dot.idleMotionBlend;
-    dot.displayOy = dy * push * dot.idleMotionBlend;
+    const blend = dot.idleMotionBlend * buildGate;
+    dot.displayOx = dx * push * blend;
+    dot.displayOy = dy * push * blend;
   }
 }
 
@@ -4296,12 +4300,9 @@ export function tickFlyingDots(
     }
   } else if (anchorChanged) {
     const eyeBuilding = isEyeZone(zone) && (pool.morphFlying || anyDotInFlight(pool));
-    const contactMorphing =
-      zone === 'contactArrow' && (pool.morphFlying || anyDotInFlight(pool));
     const scrollFollowStride = scrollLite ? 2 : 1;
     const shouldRigidFollow =
       !eyeBuilding
-      && !contactMorphing
       && (!scrollLite || opts.meshFrameId == null || opts.meshFrameId % scrollFollowStride === 0);
     if (shouldRigidFollow) {
       const sizeChanged =

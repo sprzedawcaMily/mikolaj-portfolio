@@ -9,10 +9,13 @@
   margin: 0 auto;
 }
 
-.card {
+.contactCard.contactCard {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  background: color-mix(in srgb, var(--surface) 32%, transparent);
+  border-color: color-mix(in srgb, var(--border-subtle) 22%, transparent);
+  backdrop-filter: blur(8px);
 }
 
 .row {

@@ -16,7 +16,7 @@ export function ContactSection() {
           />
         </DotReveal>
         <DotReveal delay={0.1}>
-          <Card className={styles.card}>
+          <Card className={styles.contactCard}>
             <div className={styles.row}>
               <span className={styles.label}>Email</span>
               <a href={`mailto:${profile.email}`} className={styles.value}>
