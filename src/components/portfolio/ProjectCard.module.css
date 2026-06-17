@@ -391,3 +391,21 @@
 .shotAreaLandscape {
   width: 100%;
 }
+
+@media (max-width: 959px) {
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .shotArea:not(.shotAreaLandscape) {
+    grid-column: auto;
+    grid-row: auto;
+    width: 100%;
+  }
+
+  .framePortrait {
+    max-width: 100%;
+  }
+}

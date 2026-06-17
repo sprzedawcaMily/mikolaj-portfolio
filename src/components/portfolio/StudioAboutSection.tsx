@@ -3,16 +3,21 @@ import { HuePickerBar } from '@/components/layout/HuePickerBar';
 import { Card, GitHubIcon, SectionHeading } from '@/components/emds';
 import { profile } from '@/data/profile';
 import { PALETTE_MESH_ANCHOR_ID } from '@/hooks/meshScrollEngine';
+import { useMobileLayout } from '@/hooks/mobileLayout';
 import styles from './StudioAboutSection.module.css';
 
 export function StudioAboutSection() {
+  const isMobile = useMobileLayout();
+
   return (
     <section className={styles.zone} id="studio-palety">
       <div className={styles.aboutBlock} id="o-mnie">
         <div className={styles.inner}>
-          <div className={styles.meshWrap} aria-hidden="true">
-            <div id={PALETTE_MESH_ANCHOR_ID} className={styles.meshSlot} />
-          </div>
+          {!isMobile && (
+            <div className={styles.meshWrap} aria-hidden="true">
+              <div id={PALETTE_MESH_ANCHOR_ID} className={styles.meshSlot} />
+            </div>
+          )}
           <Card className={styles.panel}>
             <DotReveal>
               <SectionHeading

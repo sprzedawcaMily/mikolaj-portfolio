@@ -3,28 +3,33 @@ import { KamochiEye } from '@/components/animation/KamochiEye';
 import { Card, MetaLabel, SectionHeading } from '@/components/emds';
 import { skillGroups } from '@/data/skills';
 import { SKILLS_MESH_ANCHOR_ID } from '@/hooks/meshScrollEngine';
+import { useMobileLayout } from '@/hooks/mobileLayout';
 import meshStyles from './sectionMeshLayout.module.css';
 import styles from './SkillsSection.module.css';
 
 export function SkillsSection() {
+  const isMobile = useMobileLayout();
+
   return (
     <section className={styles.section} id="umiejetnosci">
       <div className={styles.inner}>
         <DotReveal>
           <div className={`${meshStyles.wrap} ${meshStyles.wrapEyeLeft}`}>
-            <div
-              id={SKILLS_MESH_ANCHOR_ID}
-              className={meshStyles.meshSlot}
-              aria-hidden="true"
-            >
-              <KamochiEye
-                anchorId={SKILLS_MESH_ANCHOR_ID}
-                className={meshStyles.eye}
-                mirrored
-                irisOnly
-                meshZone="skillsEye"
-              />
-            </div>
+            {!isMobile && (
+              <div
+                id={SKILLS_MESH_ANCHOR_ID}
+                className={meshStyles.meshSlot}
+                aria-hidden="true"
+              >
+                <KamochiEye
+                  anchorId={SKILLS_MESH_ANCHOR_ID}
+                  className={meshStyles.eye}
+                  mirrored
+                  irisOnly
+                  meshZone="skillsEye"
+                />
+              </div>
+            )}
             <div className={meshStyles.content}>
               <SectionHeading
                 label="Umiejętności"

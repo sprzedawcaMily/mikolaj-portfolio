@@ -2,6 +2,7 @@ import { FlyingMeshDots } from '@/components/animation/FlyingMeshDots';
 import { MeshPerfMonitor } from '@/components/debug/MeshPerfMonitor';
 import { SiteHeader } from '@/components/layout/SiteHeader';
 import { MeshZoneProvider } from '@/context/MeshZoneContext';
+import { useMobileLayout } from '@/hooks/mobileLayout';
 import {
   ContactZone,
   ExperienceSection,
@@ -15,12 +16,14 @@ import { ThemeProvider } from '@/theme/ThemeProvider';
 import styles from './App.module.css';
 
 export default function App() {
+  const isMobile = useMobileLayout();
+
   return (
     <ThemeProvider>
-      <MeshPerfMonitor />
+      {!isMobile && <MeshPerfMonitor />}
       <MeshZoneProvider>
         <div className={styles.pageShell}>
-          <FlyingMeshDots />
+          {!isMobile && <FlyingMeshDots />}
           <div className={styles.pageContent}>
             <SiteHeader />
             <main>

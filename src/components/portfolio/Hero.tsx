@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Badge, GitHubIcon } from '@/components/emds';
 import { profile } from '@/data/profile';
 import { HERO_MESH_ANCHOR_ID } from '@/hooks/meshScrollEngine';
+import { useMobileLayout } from '@/hooks/mobileLayout';
 import styles from './Hero.module.css';
 
 const skillStats = [
@@ -12,6 +13,8 @@ const skillStats = [
 ];
 
 export function Hero() {
+  const isMobile = useMobileLayout();
+
   return (
     <section className={styles.hero} id="top">
       <div className={styles.heroGrid}>
@@ -66,7 +69,9 @@ export function Hero() {
           </div>
         </motion.div>
 
-        <div id={HERO_MESH_ANCHOR_ID} className={styles.meshSlot} aria-hidden="true" />
+        {!isMobile && (
+          <div id={HERO_MESH_ANCHOR_ID} className={styles.meshSlot} aria-hidden="true" />
+        )}
       </div>
     </section>
   );

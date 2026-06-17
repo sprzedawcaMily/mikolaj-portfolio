@@ -1,0 +1,6 @@
+/* Warstwa mesh wyłączona w JS na mobile — zapasowe ukrycie canvasu. */
+
+html.layout-mobile #mesh-flying-layer,
+html.layout-mobile #flying-mesh-canvas {
+  display: none !important;
+}

@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { DotReveal } from '@/components/animation/DotReveal';
 import { Badge, Card, MetaLabel } from '@/components/emds';
 import type { Project } from '@/data/projects';
+import { useMobileLayout } from '@/hooks/mobileLayout';
 import {
   TRANSITRANK_MESH_ANCHOR_ID,
   FORKFULL_MESH_ANCHOR_ID,
@@ -17,6 +18,7 @@ interface ProjectCardProps {
 }
 
 export function ProjectCard({ project, index }: ProjectCardProps) {
+  const isMobile = useMobileLayout();
   const [shotIndex, setShotIndex] = useState(0);
   const [imgOk, setImgOk] = useState(true);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -91,7 +93,7 @@ export function ProjectCard({ project, index }: ProjectCardProps) {
       delay={index * 0.06}
       className={`${styles.wrap} ${project.id === 'transitrank' ? styles.wrapTransitRank : ''} ${project.id === 'forkfull' ? styles.wrapForkFull : ''} ${project.id === 'kamochi' ? styles.wrapKamochi : ''} ${project.id === 'legitcheck' ? styles.wrapLegitCheck : ''} ${project.id === 'stylerank' ? styles.wrapStyleRank : ''}`}
     >
-      {meshAnchorId && (
+      {meshAnchorId && !isMobile && (
         <div
           id={meshAnchorId}
           className={`${styles.meshSlot} ${project.id === 'forkfull' || project.id === 'legitcheck' ? styles.meshSlotLeft : ''}`}

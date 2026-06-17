@@ -286,27 +286,6 @@ button.ctaSecondary {
   .heroGrid {
     grid-template-columns: minmax(0, 1fr);
   }
-
-  .meshSlot {
-    position: absolute;
-    top: 6%;
-    left: 50%;
-    right: auto;
-    width: min(560px, 100%);
-    height: min(680px, 72vh);
-    max-width: none;
-    transform: translateX(-50%);
-    justify-self: center;
-    opacity: 0;
-  }
-
-  .meshBackground {
-    opacity: 0.46;
-  }
-
-  .meshArrowMode {
-    opacity: 0.68;
-  }
 }
 
 @media (max-width: 640px) {
