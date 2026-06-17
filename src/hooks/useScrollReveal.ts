@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { scheduleScrollReveal, attachScrollRevealTracking } from '@/hooks/scrollRevealBatch';
+import { MOBILE_LAYOUT_MQ } from '@/hooks/mobileLayout';
 
 export function useScrollReveal<T extends HTMLElement>(
   threshold = 0.12,
@@ -10,6 +11,12 @@ export function useScrollReveal<T extends HTMLElement>(
   const revealId = useId();
 
   useEffect(() => {
+    // Mobile: bez batchowania i bez "pojawiania się" po scroll-stop — od razu włącz sekcję.
+    if (window.matchMedia(MOBILE_LAYOUT_MQ).matches) {
+      setVisible(true);
+      return;
+    }
+
     attachScrollRevealTracking();
     const el = ref.current;
     if (!el) return;
