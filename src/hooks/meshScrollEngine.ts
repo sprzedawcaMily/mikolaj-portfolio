@@ -725,6 +725,7 @@ export type ZonePins = {
 };
 
 let pinsCacheFrame = -1;
+let pinsScrollHoldUntil = -1;
 let pinsCache: ZonePins | null = null;
 
 function computeAllZonePinsUncached(): ZonePins | null {
@@ -794,17 +795,22 @@ function computeAllZonePinsUncached(): ZonePins | null {
 }
 
 /** Współdzielony cache pinów — jeden odczyt DOM na klatkę animacji mesh. */
-export function computeAllZonePins(meshFrameId = -1): ZonePins | null {
+export function computeAllZonePins(meshFrameId = -1, scrollHold = false): ZonePins | null {
   if (meshFrameId >= 0 && pinsCacheFrame === meshFrameId && pinsCache) {
+    return pinsCache;
+  }
+  if (scrollHold && pinsCache && meshFrameId >= 0 && meshFrameId <= pinsScrollHoldUntil) {
     return pinsCache;
   }
   pinsCache = computeAllZonePinsUncached();
   pinsCacheFrame = meshFrameId;
+  pinsScrollHoldUntil = scrollHold && meshFrameId >= 0 ? meshFrameId + 2 : -1;
   return pinsCache;
 }
 
 export function invalidateZonePinsCache() {
   pinsCacheFrame = -1;
+  pinsScrollHoldUntil = -1;
   pinsCache = null;
 }
 

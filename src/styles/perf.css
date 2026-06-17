@@ -1,5 +1,19 @@
 /* Tryb lite / slow — mniej kosztownych efektów GPU (klasy z meshPerfMode). */
 
+/* Scroll — backdrop-filter na kartach obciąża kompozytor; header i hero (#top) zostają. */
+html.mesh-scrolling #studio-palety,
+html.mesh-scrolling #studio-palety *,
+html.mesh-scrolling #projekty,
+html.mesh-scrolling #projekty *,
+html.mesh-scrolling #doswiadczenie,
+html.mesh-scrolling #doswiadczenie *,
+html.mesh-scrolling #umiejetnosci,
+html.mesh-scrolling #umiejetnosci *,
+html.mesh-scrolling #kontakt,
+html.mesh-scrolling #kontakt * {
+  backdrop-filter: none !important;
+}
+
 html.mesh-lite .dotStar,
 html.mesh-lite .dotFlight,
 html.mesh-lite .dotSettleBloom,

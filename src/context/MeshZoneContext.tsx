@@ -11,7 +11,6 @@ import {
 } from '@/hooks/meshScrollEngine';
 import { currentMeshFrameId, subscribeMeshFrame } from '@/hooks/meshAnimationLoop';
 import {
-  isMeshScrolling,
   publishMeshZone,
   readMeshZone,
   subscribeMeshZone,
@@ -33,7 +32,6 @@ export function MeshZoneProvider({ children }: { children: ReactNode }) {
 
     const unsubscribeFrame = subscribeMeshFrame(() => {
       if (!active || document.hidden) return;
-      if (isMeshScrolling()) return;
       const frame = computeScrollFrame(currentMeshFrameId());
       if (!frame) return;
 

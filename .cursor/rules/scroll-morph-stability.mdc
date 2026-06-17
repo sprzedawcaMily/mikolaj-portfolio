@@ -1,17 +1,18 @@
 ---
-description: Invariants scroll-morph mesh — nie psuj bez powodu
-globs: src/components/animation/flyingDotEngine.ts,src/hooks/meshScrollEngine.ts,src/components/animation/FlyingMeshDots.tsx
+description: Scroll-morph mesh — stabilność, wydajność, antywzorce (zatwierdzone)
+globs: src/components/animation/flyingDotEngine.ts,src/hooks/meshScrollEngine.ts,src/components/animation/FlyingMeshDots.tsx,src/styles/perf.css
 alwaysApply: false
 ---
 
-# Scroll morph — stabilność animacji
+# Scroll morph — stabilność i wydajność
 
-## Architektura (aktualna)
+## Architektura
 
 - **Warstwa:** `FlyingMeshDots` (`#mesh-flying-layer`, canvas `#flying-mesh-canvas`)
 - **Silnik:** `flyingDotEngine.ts` — lot kropek, paint canvas, morph między strefami
 - **Scroll / strefy:** `meshScrollEngine.ts` — dyskretne strefy z histerezą
-- **Pętla:** `meshAnimationLoop.ts` — jeden RAF
+- **Pętla:** `meshAnimationLoop.ts` — jeden RAF; `FlyingMeshDots` subskrybuje tick
+- **CSS scroll:** `setMeshScrolling` → `html.mesh-scrolling` (klasa z `meshZoneStore.ts`)
 
 ## Zasada główna
 
@@ -21,21 +22,101 @@ alwaysApply: false
 
 `hero → palette → bus → fork → spray → loupe → ring → careerEye → skillsEye → contactArrow`
 
-## Nie psuj
+---
 
-- **Histereza stref** (`committedZone`, `ZONE_HYSTERESIS_PX`) — bez oscylacji przy odwróceniu scrolla
-- **`scrollLite`** — podczas scrolla nie przełączaj strefy morphu w połowie lotu; `catchUp` po zatrzymaniu
+## scrollLite — stabilność (nie psuj)
+
+| Invariant | Implementacja |
+|-----------|----------------|
+| Strefa morphu | Strefa = `resolveActiveMeshZone()` **w trakcie scrolla**; blokada tylko gdy `morphBusy` (lot / `zoneSyncPending`) |
+| Skoki kropek | `freezeHeroScroll` — bez `syncRigidLayoutFollow` / `activeLayoutKey` na hero |
+| Kreski | `paintWires` **zawsze** przy malowaniu hero — nigdy `skipWires` tylko przez scroll |
+| Kreski przy zmianie celu | `wireRetireAlpha` / `wireTargetAlpha` — zero gdy `morphFlying` + kropki wciąż przy `src` (`anchorGate ≥ 0.72`) |
+| Podwojenie kropek | `scrollCanvasDetached` — `detachDotElement` **raz** na wejściu w scroll canvas |
+| Pozycja przy starcie scrolla | Ten sam wzór malowania co idle: `heroFaceActive` bez `!scrollLite`, `scrollFrozen: false` |
+| Animacja twarzy | `applyHeroHairAmbient` + `lerpHeroFaceMotion` w scrollLite; kursor (`faceMotionReady`) tylko poza scrollem |
+| Paint canvas | **Clip clear** — `wireFullClear` tylko przy `morphActive`; paleta `fullClear` tylko **poza** scrollLite |
+
+---
+
+## scrollLite — wydajność (zatwierdzona konfiguracja)
+
+Ta kombinacja daje akceptowalny FPS (np. ~120+ przy 144 Hz) przy minimalnym scrollu w dół od hero.
+
+### `FlyingMeshDots.tsx`
+
+- `scrollLite: scrolling`, `wireStride` przy scrollu: **4** (normal), **5–6** (lite/slow/reduced)
+- **Pomiń tick co 2. klatkę RAF** gdy `scrolling && !isMeshMorphBusy(pool)` — animacja twarzy ~72 Hz wystarczy
+- `?full=1` (`isMeshFullFps`) — stride 1 tylko **poza** scrollem
+
+### `flyingDotEngine.ts`
+
+| Tryb | Warunek | Zachowanie |
+|------|---------|------------|
+| `scrollDormant` | scrollLite + settled + **poza viewport** | Wczesny `return` — zero pętli `pool.dots`, zero paintu |
+| `scrollZoneIdle` | scrollLite + settled + bez lotu | Bez pętli `pool.dots`, bez `settleHeroMeshDots` |
+| Paint hero | scrollLite + hero **na ekranie** | `wireStride` min **5**; `stepHairMix` tylko na `paintDotIds` |
+| Włosy | scrollLite + hero na ekranie | `applyHeroHairAmbient` co **2.** klatkę; `lerpHeroFaceMotion` co tick mesh |
+
+### `meshScrollEngine.ts`
+
+- `computeAllZonePins(frameId, scrollHold)` — przy `scrollHold=true` (scrollLite) cache pinów na **2 klatki** (mniej `getBoundingClientRect`)
+
+### `perf.css`
+
+```css
+/* Tylko sekcje poniżej hero — header i #top zachowują glass */
+html.mesh-scrolling #studio-palety, #projekty, … { backdrop-filter: none !important; }
+```
+
+Nie używaj `html.mesh-scrolling *` — zabija blur headera i hero.
+
+---
+
+## Antywzorce (powodują regresje)
+
+```ts
+// ❌ Kreski znikają
+skipWires = scrollLite && zone === 'hero';
+
+// ❌ Skok kropek przy scrollu
+syncRigidLayoutFollow(...) // gdy freezeHeroScroll
+heroFaceActive = ... && !scrollLite;
+paintHeroCanvasDots(..., scrollFrozen: scrollLite);
+
+// ❌ Podwojenie / „milion kropek”
+hideDotElement(dot); // bez detach gdy canvas przejął strefę
+fullClear = scrollLite; // czyści canvas wysokości całej strony
+clearWireCanvasRegion(fullClear) na klatkach bez paintu
+
+// ❌ Zamrożenie twarzy
+faceMotionReady = !scrollLite && ...; // + brak lerp w scrollLite
+
+// ❌ FPS 144→80 przy minimalnym scrollu
+for (const dot of pool.dots.values()) { stepHairMix(...) } // w scrollLite
+settleHeroMeshDots(...) // co klatkę w scrollZoneIdle
+// brak scrollDormant / scrollZoneIdle / tick co 2. klatkę
+// brak wyłączenia backdrop-filter w mesh-scrolling
+```
+
+---
+
+## Inne invarianty
+
+- **Histereza stref** (`committedZone`, `ZONE_HYSTERESIS_PX`)
 - **`setMorphZoneLock`** — blokada flipu strefy w trakcie morphu
-- **Reflektory** (dysza spreju, lampy autobusu) — `snapReflectorForMorph` + `reflectorIgnite`; nie pokazuj przed zakończeniem lotu pozostałych kropek
-- **Spray footprint** — czyść rozszerzony clip canvasu (`sprayPaintMargin`), inaczej zostają kolorowe artefakty nad kartą
-- **Ring shimmer** — tylko kropki (`paintRingCanvasDots`), nie kreski
+- **Reflektory** — `snapReflectorForMorph` + `reflectorIgnite`
+- **Spray footprint** — rozszerzony clip (`sprayPaintMargin`)
+- **Ring shimmer** — tylko kropki, nie kreski
+- **Mobile ≤959px** — brak `FlyingMeshDots`; scroll perf hero nie dotyczy telefonu
 
-## Pliki kluczowe
+## Pliki
 
 | Plik | Rola |
 |------|------|
-| `flyingDotEngine.ts` | Pool, sync celów, paint, efekty stref |
-| `meshScrollEngine.ts` | Anchory kart, `resolveActiveMeshZone`, piny |
-| `loadMeshBundle.ts` | SVG → mesh; strefy projektów deferred |
-| `meshDotAtlas.ts` | Layout kropek per strefa |
-| `meshPerfMode.ts` | lite / slow / full FPS |
+| `flyingDotEngine.ts` | `scrollDormant`, `scrollZoneIdle`, paint, `wireFullClear` |
+| `MeshZoneContext.tsx` | `paletteAim` także podczas scrolla (bez `isMeshScrolling` guard) |
+| `FlyingMeshDots.tsx` | `scrollLite`, `wireStride`, tick co 2. klatkę |
+| `meshScrollEngine.ts` | Piny, `computeAllZonePins` + scrollHold |
+| `meshZoneStore.ts` | `setMeshScrolling` → `html.mesh-scrolling` |
+| `perf.css` | Wyłączenie `backdrop-filter` przy scrollu |

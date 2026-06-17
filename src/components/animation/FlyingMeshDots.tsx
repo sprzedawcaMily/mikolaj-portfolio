@@ -4,6 +4,7 @@ import { loadMeshBundle } from '@/components/animation/mesh/morph/loadMeshBundle
 import type { MeshBundle } from '@/components/animation/mesh/morph/types';
 import {
   createFlyingPool,
+  isMeshMorphBusy,
   prewarmMeshLayouts,
   stashScrollZoneIntent,
   tickFlyingDots,
@@ -178,17 +179,22 @@ export function FlyingMeshDots() {
     attachScrollRevealTracking();
     window.addEventListener('scroll', onUserScrollIntent, { passive: true });
     window.addEventListener('wheel', onUserScrollIntent, { passive: true });
+    window.addEventListener('touchmove', onUserScrollIntent, { passive: true });
 
     const unsubscribe = subscribeMeshFrame((_ts, dt) => {
       if (document.hidden) return;
 
       const scrolling = scrollPausedRef.current;
+      const meshFrameId = currentMeshFrameId();
 
       const b = bundleRef.current;
       const layer = layerRef.current;
       if (!b || !layer) return;
 
       const pool = poolRef.current;
+      if (scrolling && meshFrameId % 2 !== 0 && !isMeshMorphBusy(pool)) {
+        return;
+      }
       const catchUp = !scrolling && catchUpRef.current;
       if (!scrolling) catchUpRef.current = false;
 
@@ -204,17 +210,16 @@ export function FlyingMeshDots() {
         }
       }
 
-      const meshFrameId = currentMeshFrameId();
       const unlimitedFps = isMeshFullFps();
       const wireStride = unlimitedFps || !scrolling
         ? 1
         : slow
-          ? 5
+          ? 6
           : lite
-            ? 5
+            ? 6
             : reducedMotion
-              ? 4
-              : 3;
+              ? 5
+              : 4;
 
       tickFlyingDots(
         pool,
@@ -249,6 +254,7 @@ export function FlyingMeshDots() {
       window.clearTimeout(scrollIdleTimer);
       window.removeEventListener('scroll', onUserScrollIntent);
       window.removeEventListener('wheel', onUserScrollIntent);
+      window.removeEventListener('touchmove', onUserScrollIntent);
       unsubscribe();
       setMorphZoneLock(null);
       setMeshScrolling(false);
