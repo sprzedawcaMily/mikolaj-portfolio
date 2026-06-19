@@ -26,8 +26,10 @@
 
 .role {
   margin-top: 8px;
-  font-size: 1.25rem;
-  font-weight: 800;
+  font-family: 'Silkscreen', 'Outfit', system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .company {
@@ -45,8 +47,10 @@
 
 .school {
   margin-top: 8px;
-  font-size: 1.25rem;
-  font-weight: 800;
+  font-family: 'Silkscreen', 'Outfit', system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .degree {

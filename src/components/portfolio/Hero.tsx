@@ -1,19 +1,15 @@
 import { motion } from 'framer-motion';
 import { Badge, GitHubIcon } from '@/components/emds';
 import { profile } from '@/data/profile';
+import { useLocale } from '@/context/LocaleProvider';
 import { HERO_MESH_ANCHOR_ID } from '@/hooks/meshScrollEngine';
 import { useMobileLayout } from '@/hooks/mobileLayout';
+import { HeroMeshPlaceholder } from './HeroMeshPlaceholder';
 import styles from './Hero.module.css';
-
-const skillStats = [
-  { label: 'Frontend', value: 97 },
-  { label: 'Backend', value: 94 },
-  { label: 'Mobile', value: 96 },
-  { label: 'Data / ETL', value: 90 },
-];
 
 export function Hero() {
   const isMobile = useMobileLayout();
+  const { t } = useLocale();
 
   return (
     <section className={styles.hero} id="top">
@@ -24,22 +20,18 @@ export function Hero() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.45, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
         >
-          <Badge tone="accent">Full-Stack · TypeScript · Mobile</Badge>
-          <p className={styles.greeting}>Player select</p>
+          <Badge tone="accent">{t.hero.badge}</Badge>
+          <p className={styles.greeting}>{t.hero.greeting}</p>
           <h1 className={styles.name}>{profile.name}</h1>
-          <p className={styles.characterClass}>Class: {profile.title} · GTFS / AI</p>
-          <p className={styles.summary}>
-            Wybierasz Mikołaja: inżyniera full-stack, który projektuje skalowalne
-            architektury w TypeScript, buduje pipeline’y danych transportowych i dowozi
-            produkty od backendu po aplikacje mobilne z AI w produkcji.
-          </p>
+          <p className={styles.characterClass}>{t.hero.characterClass}</p>
+          <p className={styles.summary}>{t.hero.summary}</p>
 
-          <div className={styles.skillPanel} aria-label="Poziom umiejętności postaci">
+          <div className={styles.skillPanel} aria-label={t.hero.skillPanelAria}>
             <div className={styles.skillHeader}>
-              <span>Skill stats</span>
-              <strong>High level build</strong>
+              <span>{t.hero.skillHeader}</span>
+              <strong>{t.hero.skillBuild}</strong>
             </div>
-            {skillStats.map((stat) => (
+            {t.hero.skills.map((stat) => (
               <div className={styles.skillRow} key={stat.label}>
                 <span className={styles.skillLabel}>{stat.label}</span>
                 <div className={styles.skillTrack} aria-hidden="true">
@@ -52,10 +44,10 @@ export function Hero() {
 
           <div className={styles.actions}>
             <a href="#projekty" className={styles.ctaPrimary}>
-              Zobacz projekty
+              {t.hero.ctaProjects}
             </a>
             <a href="#kontakt" className={styles.ctaSecondary}>
-              Zatwierdź
+              {t.hero.ctaConfirm}
             </a>
             <a
               href={profile.github}
@@ -70,7 +62,9 @@ export function Hero() {
         </motion.div>
 
         {!isMobile && (
-          <div id={HERO_MESH_ANCHOR_ID} className={styles.meshSlot} aria-hidden="true" />
+          <div id={HERO_MESH_ANCHOR_ID} className={styles.meshSlot} aria-hidden="true">
+            <HeroMeshPlaceholder />
+          </div>
         )}
       </div>
     </section>

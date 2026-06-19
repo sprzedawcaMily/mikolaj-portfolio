@@ -1,18 +1,20 @@
 import { GitHubIcon } from '@/components/emds';
 import { profile } from '@/data/profile';
+import { useLocale } from '@/context/LocaleProvider';
 import styles from './SiteFooter.module.css';
 
 export function SiteFooter() {
   const year = new Date().getFullYear();
+  const { t } = useLocale();
 
   return (
     <footer className={styles.footer}>
       <p className={styles.meta}>
         © {year} {profile.name}
       </p>
-      <nav className={styles.links} aria-label="Linki kontaktowe">
+      <nav className={styles.links} aria-label={t.footer.contactLinks}>
         <a href={`mailto:${profile.email}`} className={styles.link}>
-          Email
+          {t.contact.email}
         </a>
         <a
           href={profile.github}
@@ -24,7 +26,7 @@ export function SiteFooter() {
           GitHub
         </a>
         <a href="#kontakt" className={styles.link}>
-          Kontakt
+          {t.footer.contact}
         </a>
       </nav>
     </footer>

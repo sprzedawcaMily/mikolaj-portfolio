@@ -1,7 +1,8 @@
 import { DotReveal } from '@/components/animation/DotReveal';
 import { KamochiEye } from '@/components/animation/KamochiEye';
 import { Card, MetaLabel, SectionHeading } from '@/components/emds';
-import { skillGroups } from '@/data/skills';
+import { useLocale } from '@/context/LocaleProvider';
+import { getLocalizedSkillGroups } from '@/i18n';
 import { SKILLS_MESH_ANCHOR_ID } from '@/hooks/meshScrollEngine';
 import { useMobileLayout } from '@/hooks/mobileLayout';
 import meshStyles from './sectionMeshLayout.module.css';
@@ -9,6 +10,8 @@ import styles from './SkillsSection.module.css';
 
 export function SkillsSection() {
   const isMobile = useMobileLayout();
+  const { locale, t } = useLocale();
+  const skillGroups = getLocalizedSkillGroups(locale);
 
   return (
     <section className={styles.section} id="umiejetnosci">
@@ -32,9 +35,9 @@ export function SkillsSection() {
             )}
             <div className={meshStyles.content}>
               <SectionHeading
-                label="Umiejętności"
-                title="Stack technologiczny"
-                subtitle="Bun, React Native, Kubernetes, Gemini i Puppeteer — stack powtarzalny w moich produktach."
+                label={t.skills.label}
+                title={t.skills.title}
+                subtitle={t.skills.subtitle}
               />
               <div className={styles.grid}>
                 {skillGroups.map((group, i) => (

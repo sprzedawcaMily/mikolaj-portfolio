@@ -1,36 +1,39 @@
 import { DotReveal } from '@/components/animation/DotReveal';
 import { Button, Card, GitHubIcon, SectionHeading } from '@/components/emds';
 import { profile } from '@/data/profile';
+import { useLocale } from '@/context/LocaleProvider';
 import { CONTACT_CTA_ANCHOR_ID } from '@/hooks/meshScrollEngine';
 import styles from './ContactSection.module.css';
 
 export function ContactSection() {
+  const { t } = useLocale();
+
   return (
     <section className={styles.section} id="kontakt">
       <div className={styles.inner}>
         <DotReveal>
           <SectionHeading
-            label="Kontakt"
-            title="Porozmawiajmy o współpracy"
-            subtitle={profile.availability}
+            label={t.contact.label}
+            title={t.contact.title}
+            subtitle={t.contact.subtitle}
           />
         </DotReveal>
         <DotReveal delay={0.1}>
           <Card className={styles.contactCard}>
             <div className={styles.row}>
-              <span className={styles.label}>Email</span>
+              <span className={styles.label}>{t.contact.email}</span>
               <a href={`mailto:${profile.email}`} className={styles.value}>
                 {profile.email}
               </a>
             </div>
             <div className={styles.row}>
-              <span className={styles.label}>Telefon</span>
+              <span className={styles.label}>{t.contact.phone}</span>
               <a href={`tel:${profile.phone.replace(/\s/g, '')}`} className={styles.value}>
                 {profile.phone}
               </a>
             </div>
             <div className={styles.row}>
-              <span className={styles.label}>GitHub</span>
+              <span className={styles.label}>{t.contact.github}</span>
               <a
                 href={profile.github}
                 className={styles.value}
@@ -41,12 +44,12 @@ export function ContactSection() {
               </a>
             </div>
             <div className={styles.row}>
-              <span className={styles.label}>Lokalizacja</span>
-              <span className={styles.value}>{profile.location}</span>
+              <span className={styles.label}>{t.contact.location}</span>
+              <span className={styles.value}>{t.profile.location}</span>
             </div>
             <div className={styles.row}>
-              <span className={styles.label}>Forma pracy</span>
-              <span className={styles.value}>{profile.workMode}</span>
+              <span className={styles.label}>{t.contact.workMode}</span>
+              <span className={styles.value}>{t.profile.workMode}</span>
             </div>
             <div className={styles.actions}>
               <Button
@@ -54,7 +57,7 @@ export function ContactSection() {
                 variant="primary"
                 onClick={() => window.open(`mailto:${profile.email}`, '_self')}
               >
-                Napisz wiadomość
+                {t.contact.ctaEmail}
               </Button>
               <a
                 href={profile.github}
@@ -63,7 +66,7 @@ export function ContactSection() {
                 rel="noopener noreferrer"
               >
                 <GitHubIcon size={16} />
-                Zobacz GitHub
+                {t.contact.ctaGithub}
               </a>
             </div>
           </Card>

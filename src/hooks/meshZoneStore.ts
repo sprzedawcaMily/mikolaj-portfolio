@@ -8,7 +8,9 @@ export type MeshZoneSnapshot = {
 let snapshot: MeshZoneSnapshot = { zone: 'hero', paletteAim: null };
 let morphZoneLock: MeshZone | null = null;
 let meshScrolling = false;
+let meshReady = false;
 const zoneListeners = new Set<() => void>();
+const meshReadyListeners = new Set<() => void>();
 
 export function setMeshScrolling(active: boolean) {
   meshScrolling = active;
@@ -49,5 +51,25 @@ export function subscribeMeshZone(fn: () => void): () => void {
   zoneListeners.add(fn);
   return () => {
     zoneListeners.delete(fn);
+  };
+}
+
+export function setMeshReady(ready: boolean) {
+  if (meshReady === ready) return;
+  meshReady = ready;
+  if (typeof document !== 'undefined') {
+    document.documentElement.dataset.meshReady = ready ? '1' : '';
+  }
+  for (const fn of meshReadyListeners) fn();
+}
+
+export function isMeshReady() {
+  return meshReady;
+}
+
+export function subscribeMeshReady(fn: () => void): () => void {
+  meshReadyListeners.add(fn);
+  return () => {
+    meshReadyListeners.delete(fn);
   };
 }

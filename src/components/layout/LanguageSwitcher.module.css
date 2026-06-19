@@ -1,0 +1,40 @@
+.switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface-inset) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 40%, transparent);
+}
+
+.compact .btn {
+  min-width: 36px;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.68rem;
+}
+
+.btn {
+  min-width: 40px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-family: 'Silkscreen', 'Outfit', system-ui, sans-serif;
+  color: var(--text-muted);
+  transition: color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.btn:hover {
+  color: var(--text);
+  transform: scale(0.99);
+}
+
+.active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent-muted) 80%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}

@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { useLocale } from '@/context/LocaleProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { accentFromHue, accentHue } from '@/theme/paletteEngine';
 import styles from './HuePickerBar.module.css';
@@ -8,6 +9,7 @@ interface HuePickerBarProps {
 }
 
 export function HuePickerBar({ className }: HuePickerBarProps) {
+  const { t } = useLocale();
   const { accent, setAccent } = useTheme();
   const trackRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
@@ -42,7 +44,7 @@ export function HuePickerBar({ className }: HuePickerBarProps) {
   }, []);
 
   return (
-    <div className={`${styles.bar} ${className ?? ''}`} aria-label="Wybór koloru akcentu">
+    <div className={`${styles.bar} ${className ?? ''}`} aria-label={t.about.paletteAria}>
       <div
         ref={trackRef}
         id="palette-color-track"

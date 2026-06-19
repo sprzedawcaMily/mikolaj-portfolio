@@ -10,7 +10,7 @@ import {
   tickFlyingDots,
   type FacePointer,
 } from '@/components/animation/flyingDotEngine';
-import { setMeshScrolling, setMorphZoneLock } from '@/hooks/meshZoneStore';
+import { setMeshReady, setMeshScrolling, setMorphZoneLock } from '@/hooks/meshZoneStore';
 import { resolveActiveMeshZone, HERO_MESH_ANCHOR_ID, FLYING_MESH_CANVAS_ID, MESH_LAYER_ID } from '@/hooks/meshScrollEngine';
 import { currentMeshFrameId, subscribeMeshFrame } from '@/hooks/meshAnimationLoop';
 import { isMeshFullFps, isMeshLiteMode, isMeshReducedMotion, isMeshSlowMode } from '@/hooks/meshPerfMode';
@@ -19,7 +19,7 @@ import { attachScrollRevealTracking } from '@/hooks/scrollRevealBatch';
 import { readMeshZone } from '@/hooks/meshZoneStore';
 import styles from './FlyingMeshDots.module.css';
 
-const SCROLL_IDLE_MS = 120;
+const SCROLL_IDLE_MS = 150;
 let prewarmScheduled = false;
 
 export function FlyingMeshDots() {
@@ -160,6 +160,7 @@ export function FlyingMeshDots() {
     let layerHeight = 0;
     let layerHeightFrame = 0;
     let scrollIdleTimer = 0;
+    let paintedOnce = false;
 
     function onUserScrollIntent() {
       markScrollActivity();
@@ -192,7 +193,7 @@ export function FlyingMeshDots() {
       if (!b || !layer) return;
 
       const pool = poolRef.current;
-      if (scrolling && meshFrameId % 2 !== 0 && !isMeshMorphBusy(pool)) {
+      if (scrolling && meshFrameId % 3 !== 0 && !isMeshMorphBusy(pool)) {
         return;
       }
       const catchUp = !scrolling && catchUpRef.current;
@@ -248,6 +249,11 @@ export function FlyingMeshDots() {
           reducedMotion,
         },
       );
+
+      if (!paintedOnce) {
+        paintedOnce = true;
+        setMeshReady(true);
+      }
     });
 
     return () => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { ProjectScreenshot } from '@/data/projects';
+import { useLocale } from '@/context/LocaleProvider';
 import styles from './ScreenshotLightbox.module.css';
 
 interface ScreenshotLightboxProps {
@@ -16,6 +17,7 @@ export function ScreenshotLightbox({
   onClose,
   onIndexChange,
 }: ScreenshotLightboxProps) {
+  const { t } = useLocale();
   const shot = shots[index];
   const hasPrev = index > 0;
   const hasNext = index < shots.length - 1;
@@ -57,7 +59,7 @@ export function ScreenshotLightbox({
         type="button"
         className={styles.close}
         onClick={onClose}
-        aria-label="Zamknij podgląd"
+        aria-label={t.lightbox.close}
       >
         ×
       </button>
@@ -72,7 +74,7 @@ export function ScreenshotLightbox({
               goPrev();
             }}
             disabled={!hasPrev}
-            aria-label="Poprzedni zrzut"
+            aria-label={t.lightbox.prev}
           >
             ‹
           </button>
@@ -84,7 +86,7 @@ export function ScreenshotLightbox({
               goNext();
             }}
             disabled={!hasNext}
-            aria-label="Następny zrzut"
+            aria-label={t.lightbox.next}
           >
             ›
           </button>

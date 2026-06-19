@@ -1,8 +1,8 @@
 import { DotReveal } from '@/components/animation/DotReveal';
 import { KamochiEye } from '@/components/animation/KamochiEye';
 import { Card, MetaLabel, SectionHeading } from '@/components/emds';
-import { education } from '@/data/education';
-import { experience } from '@/data/experience';
+import { useLocale } from '@/context/LocaleProvider';
+import { getLocalizedEducation, getLocalizedExperience } from '@/i18n';
 import { EXPERIENCE_MESH_ANCHOR_ID } from '@/hooks/meshScrollEngine';
 import { useMobileLayout } from '@/hooks/mobileLayout';
 import meshStyles from './sectionMeshLayout.module.css';
@@ -10,6 +10,9 @@ import styles from './ExperienceSection.module.css';
 
 export function ExperienceSection() {
   const isMobile = useMobileLayout();
+  const { locale, t } = useLocale();
+  const experience = getLocalizedExperience(locale);
+  const education = getLocalizedEducation(locale);
 
   return (
     <section className={styles.section} id="doswiadczenie">
@@ -32,9 +35,9 @@ export function ExperienceSection() {
             )}
             <div className={meshStyles.content}>
               <SectionHeading
-                label="Doświadczenie"
-                title="Kariera w skrócie"
-                subtitle="Od Assembless po TransitRank i Kamochi — plus matura 2025 i studia na Uczelni Łazarskiego."
+                label={t.experience.label}
+                title={t.experience.title}
+                subtitle={t.experience.subtitle}
               />
               <div className={styles.timeline}>
                 {experience.map((item, i) => (
@@ -59,9 +62,9 @@ export function ExperienceSection() {
 
               <div className={styles.educationBlock} id="wyksztalcenie">
                 <SectionHeading
-                  label="Wykształcenie"
-                  title="Matura i studia"
-                  subtitle="Liceum ogólnokształcące z maturą 2025 oraz studia licencjackie na Uczelni Łazarskiego."
+                  label={t.experience.educationLabel}
+                  title={t.experience.educationTitle}
+                  subtitle={t.experience.educationSubtitle}
                 />
                 <div className={styles.timeline}>
                   {education.map((item, i) => (

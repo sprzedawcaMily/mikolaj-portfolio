@@ -1,7 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type CSSProperties } from 'react';
 import { DotReveal } from '@/components/animation/DotReveal';
 import { Badge, Card, MetaLabel } from '@/components/emds';
 import type { Project } from '@/data/projects';
+import { MESH_ASSETS } from '@/data/meshAssets';
+import { useLocale } from '@/context/LocaleProvider';
 import { useMobileLayout } from '@/hooks/mobileLayout';
 import {
   TRANSITRANK_MESH_ANCHOR_ID,
@@ -12,6 +14,15 @@ import {
 } from '@/hooks/meshScrollEngine';
 import { ScreenshotLightbox } from './ScreenshotLightbox';
 import styles from './ProjectCard.module.css';
+
+const PROJECT_MESH_ICON: Record<string, string> = {
+  transitrank: MESH_ASSETS.bus,
+  forkfull: MESH_ASSETS.fork,
+  kamochi: MESH_ASSETS.spray,
+  legitcheck: MESH_ASSETS.loupe,
+  stylerank: MESH_ASSETS.ring,
+};
+
 interface ProjectCardProps {
   project: Project;
   index: number;
@@ -19,12 +30,14 @@ interface ProjectCardProps {
 
 export function ProjectCard({ project, index }: ProjectCardProps) {
   const isMobile = useMobileLayout();
+  const { t } = useLocale();
   const [shotIndex, setShotIndex] = useState(0);
   const [imgOk, setImgOk] = useState(true);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const shot = project.screenshots[shotIndex];
   const isLandscape = project.screenshotOrientation === 'landscape';
   const hasShots = project.screenshots.length > 0;
+  const meshIcon = PROJECT_MESH_ICON[project.id];
 
   const onShotChange = useCallback((i: number) => {
     setShotIndex(i);
@@ -36,8 +49,9 @@ export function ProjectCard({ project, index }: ProjectCardProps) {
       <button
         type="button"
         className={`${styles.frame} ${isLandscape ? styles.frameLandscape : styles.framePortrait}`}
-        onClick={() => setLightboxOpen(true)}
-        aria-label={`Powiększ: ${shot?.alt ?? project.name}`}
+        onClick={() => imgOk && setLightboxOpen(true)}
+        aria-label={`${t.projects.zoomAria}: ${shot?.alt ?? project.name}`}
+        disabled={!imgOk}
       >
         {shot && imgOk ? (
           <img
@@ -48,14 +62,22 @@ export function ProjectCard({ project, index }: ProjectCardProps) {
             onError={() => setImgOk(false)}
           />
         ) : (
-          <div className={styles.placeholderInner}>
-            <span>Dodaj zrzut do folderu public/images</span>
-            <code>{shot?.src ?? project.screenshots[0]?.src}</code>
+          <div
+            className={styles.placeholderInner}
+            style={{ '--project-accent': project.accent } as CSSProperties}
+          >
+            {meshIcon && (
+              <img src={meshIcon} alt="" className={styles.placeholderMesh} aria-hidden />
+            )}
+            <span className={styles.placeholderTitle}>{project.name}</span>
+            <span className={styles.placeholderHint}>{t.projects.placeholderHint}</span>
           </div>
         )}
-        <span className={styles.zoomHint} aria-hidden>
-          Kliknij, aby powiększyć
-        </span>
+        {imgOk && (
+          <span className={styles.zoomHint} aria-hidden>
+            {t.projects.zoomHint}
+          </span>
+        )}
       </button>
       {project.screenshots.length > 1 && (
         <div className={styles.thumbs}>
@@ -65,9 +87,11 @@ export function ProjectCard({ project, index }: ProjectCardProps) {
               type="button"
               className={`${styles.thumb} ${isLandscape ? styles.thumbLandscape : ''} ${i === shotIndex ? styles.thumbActive : ''}`}
               onClick={() => onShotChange(i)}
-              aria-label={`Podgląd ${i + 1}: ${s.alt}`}
+              aria-label={`${t.projects.thumbAria} ${i + 1}: ${s.alt}`}
             >
-              <img src={s.src} alt="" loading="lazy" />
+              <img src={s.src} alt="" loading="lazy" onError={(e) => {
+                (e.target as HTMLImageElement).style.opacity = '0.3';
+              }} />
             </button>
           ))}
         </div>
@@ -132,7 +156,7 @@ export function ProjectCard({ project, index }: ProjectCardProps) {
 
           {project.infrastructure.length > 0 && (
             <div className={styles.infra}>
-              <p className={styles.infraLabel}>Infrastruktura</p>
+              <p className={styles.infraLabel}>{t.projects.infrastructure}</p>
               <ul className={styles.infraList}>
                 {project.infrastructure.map((item) => (
                   <li key={item}>{item}</li>
@@ -150,9 +174,9 @@ export function ProjectCard({ project, index }: ProjectCardProps) {
           </ul>
 
           <div className={styles.stack}>
-            {project.stack.map((t) => (
-              <Badge key={t} tone="accent">
-                {t}
+            {project.stack.map((tech) => (
+              <Badge key={tech} tone="accent">
+                {tech}
               </Badge>
             ))}
           </div>

@@ -1,6 +1,7 @@
 import { FlyingMeshDots } from '@/components/animation/FlyingMeshDots';
 import { MeshPerfMonitor } from '@/components/debug/MeshPerfMonitor';
 import { SiteHeader } from '@/components/layout/SiteHeader';
+import { LocaleProvider } from '@/context/LocaleProvider';
 import { MeshZoneProvider } from '@/context/MeshZoneContext';
 import { useMobileLayout } from '@/hooks/mobileLayout';
 import {
@@ -20,24 +21,26 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      {!isMobile && <MeshPerfMonitor />}
-      <MeshZoneProvider>
-        <div className={styles.pageShell}>
-          {!isMobile && <FlyingMeshDots />}
-          <div className={styles.pageContent}>
-            <SiteHeader />
-            <main>
-              <Hero />
-              <StudioAboutSection />
-              <ProjectsSection />
-              <ExperienceSection />
-              <SkillsSection />
-              <ContactZone />
-            </main>
-            <SiteFooter />
+      <LocaleProvider>
+        {!isMobile && <MeshPerfMonitor />}
+        <MeshZoneProvider>
+          <div className={styles.pageShell}>
+            {!isMobile && <FlyingMeshDots />}
+            <div className={styles.pageContent}>
+              <SiteHeader />
+              <main>
+                <Hero />
+                <StudioAboutSection />
+                <ProjectsSection />
+                <ExperienceSection />
+                <SkillsSection />
+                <ContactZone />
+              </main>
+              <SiteFooter />
+            </div>
           </div>
-        </div>
-      </MeshZoneProvider>
+        </MeshZoneProvider>
+      </LocaleProvider>
     </ThemeProvider>
   );
 }
