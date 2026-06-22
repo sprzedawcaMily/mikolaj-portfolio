@@ -27,23 +27,18 @@
 }
 
 .label {
+  composes: type-label from global;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
   color: var(--text-muted);
 }
 
 .value {
+  composes: type-lead from global;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text);
   word-break: break-word;
 }
 
@@ -60,7 +55,7 @@
 }
 
 .secondaryLink {
-  font-size: 0.875rem;
+  composes: type-body-sm from global;
   font-weight: 700;
   color: var(--accent);
   padding: 12px 4px;

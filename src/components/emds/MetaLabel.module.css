@@ -1,10 +1,5 @@
-.meta {
-  display: block;
-  font-family: 'Silkscreen', 'Outfit', system-ui, sans-serif;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
+.meta {
+  composes: type-label from global;
+  display: block;
+  color: var(--text-muted);
+}

@@ -1,3 +1,5 @@
+@import './typography.css';
+
 *,
 *::before,
 *::after {
@@ -16,9 +18,10 @@ html {
 
 body {
   position: relative;
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
   color: var(--text);
-  line-height: 1.6;
+  line-height: var(--leading-normal);
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
   overflow-x: clip;

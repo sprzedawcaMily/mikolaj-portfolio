@@ -4,6 +4,7 @@ import App from './App';
 import { initMeshPerfMode } from '@/hooks/meshPerfMode';
 import { attachScrollIntentTracking } from '@/hooks/meshPerfStats';
 import { attachMobileLayoutListener, initMobileLayoutClass } from '@/hooks/mobileLayout';
+import '@/styles/fonts.css';
 import '@/styles/globals.css';
 import '@/styles/perf.css';
 import '@/styles/mobile.css';

@@ -12,18 +12,15 @@
   min-width: 36px;
   min-height: 32px;
   padding: 0 10px;
-  font-size: 0.68rem;
+  font-size: var(--text-xs);
 }
 
 .btn {
+  composes: type-btn from global;
   min-width: 40px;
   min-height: 36px;
   padding: 0 12px;
   border-radius: var(--radius-pill);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  font-family: 'Silkscreen', 'Outfit', system-ui, sans-serif;
   color: var(--text-muted);
   transition: color 0.2s ease, background 0.2s ease, transform 0.2s ease;
 }

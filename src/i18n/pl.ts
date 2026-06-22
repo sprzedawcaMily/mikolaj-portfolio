@@ -18,13 +18,13 @@ export const pl: Translations = {
   },
   hero: {
     badge: 'Full-Stack · TypeScript · Mobile',
-    greeting: 'Player select',
-    characterClass: 'Class: Software Engineer · GTFS / AI',
+    greeting: 'Wybór postaci',
+    characterClass: 'Klasa: Software Engineer · GTFS / AI',
     summary:
       'Wybierasz Mikołaja: inżyniera full-stack, który projektuje skalowalne architektury w TypeScript, buduje pipeline’y danych transportowych i dowozi produkty od backendu po aplikacje mobilne z AI w produkcji.',
     skillPanelAria: 'Poziom umiejętności postaci',
-    skillHeader: 'Skill stats',
-    skillBuild: 'High level build',
+    skillHeader: 'Statystyki',
+    skillBuild: 'Build na max level',
     skills: [
       { label: 'Frontend', value: 97 },
       { label: 'Backend', value: 94 },
@@ -269,11 +269,11 @@ export const pl: Translations = {
     subtitle:
       'Bun, React Native, Kubernetes, Gemini i Puppeteer — stack powtarzalny w moich produktach.',
     groups: {
-      core: { label: 'Core Development' },
-      data: { label: 'Dane & Chmura' },
-      devops: { label: 'DevOps & Infra' },
-      ai: { label: 'AI & Automatyzacja' },
-      design: { label: 'Design & Metodyki' },
+      core: { label: 'Rdzeń developmentu' },
+      data: { label: 'Dane i chmura' },
+      devops: { label: 'DevOps i infra' },
+      ai: { label: 'AI i automatyzacja' },
+      design: { label: 'Design i metodyki' },
     },
   },
   contact: {

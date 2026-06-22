@@ -57,11 +57,8 @@
 }
 
 .paletteLabel {
+  composes: type-label from global;
   margin-bottom: 12px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
   text-align: center;
   color: var(--text-muted);
 }
@@ -74,25 +71,23 @@
 }
 
 .statLabel {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  composes: type-label from global;
   color: var(--text-muted);
   margin-bottom: 8px;
 }
 
 .statValue {
-  font-size: 1.125rem;
+  composes: type-lead from global;
+  font-size: var(--text-lg);
   font-weight: 700;
-  color: var(--text);
 }
 
 .statLink {
+  composes: type-lead from global;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 700;
   color: var(--accent);
   word-break: break-word;

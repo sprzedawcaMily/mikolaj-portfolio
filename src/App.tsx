@@ -1,5 +1,5 @@
-import { FlyingMeshDots } from '@/components/animation/FlyingMeshDots';
-import { MeshPerfMonitor } from '@/components/debug/MeshPerfMonitor';
+import { DeferredFlyingMesh } from '@/components/animation/DeferredFlyingMesh';
+import { DeferredMeshPerfMonitor } from '@/components/debug/DeferredMeshPerfMonitor';
 import { SiteHeader } from '@/components/layout/SiteHeader';
 import { LocaleProvider } from '@/context/LocaleProvider';
 import { MeshZoneProvider } from '@/context/MeshZoneContext';
@@ -22,10 +22,10 @@ export default function App() {
   return (
     <ThemeProvider>
       <LocaleProvider>
-        {!isMobile && <MeshPerfMonitor />}
+        {!isMobile && <DeferredMeshPerfMonitor />}
         <MeshZoneProvider>
           <div className={styles.pageShell}>
-            {!isMobile && <FlyingMeshDots />}
+            {!isMobile && <DeferredFlyingMesh />}
             <div className={styles.pageContent}>
               <SiteHeader />
               <main>

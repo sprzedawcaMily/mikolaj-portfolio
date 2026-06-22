@@ -13,7 +13,8 @@
     "perf:audit": "bun scripts/perf-audit.mjs"
   },
   "dependencies": {
-    "framer-motion": "^11.18.2",
+    "@fontsource/outfit": "^5.2.8",
+    "@fontsource/silkscreen": "^5.2.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

@@ -27,7 +27,9 @@
 }
 
 .list li {
-  font-size: 0.875rem;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   color: var(--text);
   min-height: 32px;
   display: flex;

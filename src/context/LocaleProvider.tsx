@@ -28,8 +28,7 @@ function readStoredLocale(): Locale {
   if (typeof window === 'undefined') return 'pl';
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === 'en' || stored === 'pl') return stored;
-  const browser = navigator.language.toLowerCase();
-  return browser.startsWith('en') ? 'en' : 'pl';
+  return 'pl';
 }
 
 function applyDocumentLocale(locale: Locale) {

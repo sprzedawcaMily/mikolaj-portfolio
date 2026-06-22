@@ -25,16 +25,14 @@
 }
 
 .role {
+  composes: type-title from global;
   margin-top: 8px;
-  font-family: 'Silkscreen', 'Outfit', system-ui, sans-serif;
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: var(--text-md);
 }
 
 .company {
   margin-top: 4px;
-  font-size: 0.9375rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--accent);
 }
@@ -46,23 +44,21 @@
 }
 
 .school {
+  composes: type-title from global;
   margin-top: 8px;
-  font-family: 'Silkscreen', 'Outfit', system-ui, sans-serif;
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: var(--text-md);
 }
 
 .degree {
   margin-top: 4px;
-  font-size: 0.9375rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--accent);
 }
 
 .meta {
   margin-top: 4px;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -75,9 +71,10 @@
 }
 
 .highlights li {
-  font-size: 0.875rem;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   color: var(--text-muted);
-  line-height: 1.55;
   padding-left: 14px;
   position: relative;
 }

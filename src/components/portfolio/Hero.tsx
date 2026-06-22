@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { Badge, GitHubIcon } from '@/components/emds';
 import { profile } from '@/data/profile';
 import { useLocale } from '@/context/LocaleProvider';
@@ -14,19 +13,19 @@ export function Hero() {
   return (
     <section className={styles.hero} id="top">
       <div className={styles.heroGrid}>
-        <motion.div
-          className={styles.copy}
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.45, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <Badge tone="accent">{t.hero.badge}</Badge>
-          <p className={styles.greeting}>{t.hero.greeting}</p>
+        <div className={styles.copy}>
+          <Badge tone="accent" className={styles.heroReveal}>
+            {t.hero.badge}
+          </Badge>
+          <p className={`${styles.greeting} ${styles.heroReveal}`}>{t.hero.greeting}</p>
           <h1 className={styles.name}>{profile.name}</h1>
-          <p className={styles.characterClass}>{t.hero.characterClass}</p>
-          <p className={styles.summary}>{t.hero.summary}</p>
+          <p className={`${styles.characterClass} ${styles.heroReveal}`}>{t.hero.characterClass}</p>
+          <p className={`${styles.summary} ${styles.heroReveal}`}>{t.hero.summary}</p>
 
-          <div className={styles.skillPanel} aria-label={t.hero.skillPanelAria}>
+          <div
+            className={`${styles.skillPanel} ${styles.heroReveal}`}
+            aria-label={t.hero.skillPanelAria}
+          >
             <div className={styles.skillHeader}>
               <span>{t.hero.skillHeader}</span>
               <strong>{t.hero.skillBuild}</strong>
@@ -42,7 +41,7 @@ export function Hero() {
             ))}
           </div>
 
-          <div className={styles.actions}>
+          <div className={`${styles.actions} ${styles.heroReveal}`}>
             <a href="#projekty" className={styles.ctaPrimary}>
               {t.hero.ctaProjects}
             </a>
@@ -59,7 +58,7 @@ export function Hero() {
               GitHub
             </a>
           </div>
-        </motion.div>
+        </div>
 
         {!isMobile && (
           <div id={HERO_MESH_ANCHOR_ID} className={styles.meshSlot} aria-hidden="true">
