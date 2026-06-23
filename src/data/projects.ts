@@ -46,11 +46,11 @@ export const projects: Project[] = [
     ],
     accent: '#5B7FD4',
     screenshots: [
-      { src: '/images/transitrank/dashboard.png', alt: 'Dashboard TransitRank' },
+      { src: '/images/transitrank/dashbord.jpg', alt: 'Dashboard TransitRank' },
       { src: '/images/transitrank/reviews.png', alt: 'Community Reviews' },
       { src: '/images/transitrank/add-review.png', alt: 'Dodawanie recenzji' },
       { src: '/images/transitrank/planner.png', alt: 'Trip Planner' },
-      { src: '/images/transitrank/more.png', alt: 'Menu More' },
+      { src: '/images/transitrank/more.jpg', alt: 'Menu More' },
     ],
     features: [
       'Autorskie logo TransitRank',
@@ -84,12 +84,13 @@ export const projects: Project[] = [
       'i18n PL / EN / DE, Health Connect (Android)',
     ],
     accent: '#6A8C71',
+    url: 'https://forkful.fly.dev/',
     screenshots: [
-      { src: '/images/forkfull/home.png', alt: 'Dzienne spożycie' },
-      { src: '/images/forkfull/meal.png', alt: 'Analiza posiłku' },
-      { src: '/images/forkfull/breakdown.png', alt: 'Podział na produkty' },
-      { src: '/images/forkfull/plan.png', alt: 'Mój Plan' },
-      { src: '/images/forkfull/settings.png', alt: 'Ustawienia' },
+      { src: '/images/forkfull/home.png', alt: 'Ekran główny z dziennym spożyciem' },
+      { src: '/images/forkfull/meal.png', alt: 'Podgląd posiłku ze zdjęcia' },
+      { src: '/images/forkfull/breakdown.png', alt: 'Szczegółowy breakdown składników' },
+      { src: '/images/forkfull/plan.png', alt: 'Widok dziennego celu i postępu' },
+      { src: '/images/forkfull/settings.png', alt: 'Profil i metryki zdrowotne' },
     ],
     features: [
       'Analiza AI ze zdjęcia — Gemini w produkcji',

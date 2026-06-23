@@ -111,11 +111,11 @@ export const pl: Translations = {
           'Material Design 3, FlashList, offline-first',
         ],
         screenshots: [
-          { alt: 'Dzienne spożycie' },
-          { alt: 'Analiza posiłku' },
-          { alt: 'Podział na produkty' },
-          { alt: 'Mój Plan' },
-          { alt: 'Ustawienia' },
+          { alt: 'Ekran główny z dziennym spożyciem' },
+          { alt: 'Podgląd posiłku ze zdjęcia' },
+          { alt: 'Szczegółowy breakdown składników' },
+          { alt: 'Widok dziennego celu i postępu' },
+          { alt: 'Profil i metryki zdrowotne' },
         ],
       },
       kamochi: {

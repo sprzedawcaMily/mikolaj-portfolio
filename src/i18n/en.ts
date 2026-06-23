@@ -111,11 +111,11 @@ export const en: Translations = {
           'Material Design 3, FlashList, offline-first',
         ],
         screenshots: [
-          { alt: 'Daily intake' },
-          { alt: 'Meal analysis' },
-          { alt: 'Product breakdown' },
-          { alt: 'My Plan' },
-          { alt: 'Settings' },
+          { alt: 'Home screen with daily intake' },
+          { alt: 'Meal preview from photo' },
+          { alt: 'Detailed ingredient breakdown' },
+          { alt: 'Daily goal and progress view' },
+          { alt: 'Profile and health metrics' },
         ],
       },
       kamochi: {
