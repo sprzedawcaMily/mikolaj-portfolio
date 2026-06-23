@@ -25,10 +25,10 @@ type LocaleContextValue = {
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 function readStoredLocale(): Locale {
-  if (typeof window === 'undefined') return 'pl';
+  if (typeof window === 'undefined') return 'en';
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === 'en' || stored === 'pl') return stored;
-  return 'pl';
+  return 'en';
 }
 
 function applyDocumentLocale(locale: Locale) {
