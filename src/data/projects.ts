@@ -47,7 +47,7 @@ export const projects: Project[] = [
     accent: '#5B7FD4',
     screenshots: [
       { src: '/images/transitrank/dashbord.jpg', alt: 'Dashboard TransitRank' },
-      { src: '/images/transitrank/reviews.png', alt: 'Community Reviews' },
+      { src: '/images/transitrank/community-reviews.jpg', alt: 'Community Reviews' },
       { src: '/images/transitrank/add-review.png', alt: 'Dodawanie recenzji' },
       { src: '/images/transitrank/planner.png', alt: 'Trip Planner' },
       { src: '/images/transitrank/more.jpg', alt: 'Menu More' },

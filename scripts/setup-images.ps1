@@ -5,7 +5,7 @@ $dst = Join-Path $root "public\images"
 
 $map = @{
   "transitrank-dashboard*" = "transitrank\dashboard.png"
-  "transitrank-reviews*"    = "transitrank\reviews.png"
+  "transitrank-reviews*"    = "transitrank\community-reviews.jpg"
   "transitrank-add*"        = "transitrank\add-review.png"
   "transitrank-planner*"    = "transitrank\planner.png"
   "transitrank-more*"       = "transitrank\more.png"
@@ -36,7 +36,7 @@ if ($files.Count -eq 0) {
 $i = 0
 $order = @(
   "transitrank\dashboard.png",
-  "transitrank\reviews.png",
+  "transitrank\community-reviews.jpg",
   "transitrank\add-review.png",
   "transitrank\planner.png",
   "transitrank\more.png",
