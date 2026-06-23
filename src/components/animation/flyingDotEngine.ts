@@ -216,6 +216,8 @@ const SYNC_BUDGET_SCROLL_MS = 6;
 const SYNC_BUDGET_IDLE_MS = 48;
 
 const STATIC_CARD_ZONES = new Set<MeshZone>(['bus', 'fork', 'spray', 'loupe', 'ring']);
+/** Margines clipu canvasu podczas morphu — obejmuje lot między pinami bez full-page clear. */
+const MORPH_PAINT_MARGIN = 220;
 
 type SprayNode = {
   along: number;
@@ -1259,6 +1261,22 @@ function poolHasActiveReflectors(pool: FlyingPool) {
   return false;
 }
 
+function dotsForMorphStep(pool: FlyingPool): FlyingDot[] {
+  const out: FlyingDot[] = [];
+  for (const dot of pool.dots.values()) {
+    if (
+      dot.alpha > 0.03
+      || dot.tgtAlpha > 0.03
+      || dotInFlight(dot)
+      || dot.departLeft > 0.01
+      || dot.flightU < 0.999
+    ) {
+      out.push(dot);
+    }
+  }
+  return out;
+}
+
 function updateMorphBloom(pool: FlyingPool, now: number) {
   if (!pool.morphFlying) return;
   let visible = 0;
@@ -1890,6 +1908,100 @@ function clearCanvasClips(
   }
 }
 
+type ZonePinClip = { pin: MeshPinState; zone: MeshZone };
+
+function morphPaintClips(
+  pin: MeshPinState,
+  zone: MeshZone,
+  pool: FlyingPool,
+  pins: NonNullable<ReturnType<typeof computeAllZonePins>>,
+  extraClearPin: MeshPinState | null,
+): ZonePinClip[] {
+  const clips: ZonePinClip[] = [{ pin, zone }];
+  if (pool.retiringWireZone && pool.retiringWireEdges.length > 0) {
+    const retirePin = pinForZonePins(pins, pool.retiringWireZone);
+    if (retirePin) clips.push({ pin: retirePin, zone: pool.retiringWireZone });
+  }
+  if (extraClearPin) clips.push({ pin: extraClearPin, zone: 'spray' });
+  return clips;
+}
+
+function morphPaintUnionRect(
+  clips: ZonePinClip[],
+  layerOrigin: { x: number; y: number },
+  layerW: number,
+  layerH: number,
+) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const { pin, zone } of clips) {
+    const margin = zone === 'spray' ? sprayPaintMargin(pin) : MORPH_PAINT_MARGIN;
+    const x = Math.max(0, pin.docLeft - layerOrigin.x - margin);
+    const y = Math.max(0, pin.docTop - layerOrigin.y - margin);
+    const right = Math.min(layerW, pin.docLeft - layerOrigin.x + pin.stageW + margin);
+    const bottom = Math.min(layerH, pin.docTop - layerOrigin.y + pin.stageH + margin);
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, right);
+    maxY = Math.max(maxY, bottom);
+  }
+  if (!Number.isFinite(minX)) return null;
+  return {
+    x: minX,
+    y: minY,
+    w: Math.max(0, maxX - minX),
+    h: Math.max(0, maxY - minY),
+  };
+}
+
+function clearMorphPaintClips(
+  ctx: CanvasRenderingContext2D,
+  pool: FlyingPool,
+  pin: MeshPinState,
+  zone: MeshZone,
+  pins: NonNullable<ReturnType<typeof computeAllZonePins>>,
+  layerOrigin: { x: number; y: number },
+  layerW: number,
+  layerH: number,
+  extraClearPin: MeshPinState | null,
+) {
+  const clips = morphPaintClips(pin, zone, pool, pins, extraClearPin);
+  const union = morphPaintUnionRect(clips, layerOrigin, layerW, layerH);
+  if (union && union.w > 0 && union.h > 0) {
+    ctx.clearRect(union.x, union.y, union.w, union.h);
+    return;
+  }
+  clearCanvasClips(ctx, layerOrigin, layerW, layerH, clips);
+}
+
+function clearWireBeforePaint(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  morphActive: boolean,
+  zone: MeshZone,
+  fullClear: boolean,
+  pin: MeshPinState,
+  pool: FlyingPool,
+  pins: NonNullable<ReturnType<typeof computeAllZonePins>> | null,
+  layerOrigin: { x: number; y: number },
+  extraClearPin: MeshPinState | null,
+) {
+  if (morphActive && pins) {
+    clearMorphPaintClips(ctx, pool, pin, zone, pins, layerOrigin, w, h, extraClearPin);
+    return;
+  }
+  if (zone === 'palette' || fullClear) {
+    ctx.clearRect(0, 0, w, h);
+    return;
+  }
+  const clips: ZonePinClip[] = [{ pin, zone }];
+  if (extraClearPin) clips.push({ pin: extraClearPin, zone: 'spray' });
+  clearCanvasClips(ctx, layerOrigin, w, h, clips);
+}
+
 function clearWireCanvasRegion(
   canvas: HTMLCanvasElement,
   layer: HTMLElement,
@@ -1900,18 +2012,26 @@ function clearWireCanvasRegion(
   zone: MeshZone = 'hero',
   extraClearPin: MeshPinState | null = null,
   fullClear = false,
+  pool: FlyingPool,
+  pins: NonNullable<ReturnType<typeof computeAllZonePins>> | null = null,
 ) {
   const { w, h, dpr } = syncWireCanvas(canvas, layer, lowDpr);
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  if (morphActive || zone === 'palette' || fullClear) {
-    ctx.clearRect(0, 0, w, h);
-    return;
-  }
-  const clips: { pin: MeshPinState; zone: MeshZone }[] = [{ pin, zone }];
-  if (extraClearPin) clips.push({ pin: extraClearPin, zone: 'spray' });
-  clearCanvasClips(ctx, layerOrigin, w, h, clips);
+  clearWireBeforePaint(
+    ctx,
+    w,
+    h,
+    morphActive,
+    zone,
+    fullClear,
+    pin,
+    pool,
+    pins,
+    layerOrigin,
+    extraClearPin,
+  );
 }
 
 function measureEyeMeshFrame(
@@ -3052,6 +3172,7 @@ function paintWires(
   pointer: FacePointer = IDLE_FACE_POINTER,
   extraClearPin: MeshPinState | null = null,
   fullClear = false,
+  pins: NonNullable<ReturnType<typeof computeAllZonePins>> | null = null,
 ) {
   const pointerPos = heroPointerStageXY(pin, pointer);
   const pointerX = pointerPos.x;
@@ -3061,13 +3182,19 @@ function paintWires(
   if (!ctx) return;
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  if (morphActive || zone === 'palette' || fullClear) {
-    ctx.clearRect(0, 0, w, h);
-  } else {
-    const clips: { pin: MeshPinState; zone: MeshZone }[] = [{ pin, zone }];
-    if (extraClearPin) clips.push({ pin: extraClearPin, zone: 'spray' });
-    clearCanvasClips(ctx, layerOrigin, w, h, clips);
-  }
+  clearWireBeforePaint(
+    ctx,
+    w,
+    h,
+    morphActive,
+    zone,
+    fullClear,
+    pin,
+    pool,
+    pins,
+    layerOrigin,
+    extraClearPin,
+  );
   ctx.lineCap = 'round';
 
   type WireBatch = { path: Path2D; alpha: number; color: string; width: number };
@@ -3764,9 +3891,14 @@ function syncFlyingTargets(
 ): boolean {
   let pending = pool.zoneSyncPending;
   if (pending && pending.zone !== zone) {
-    pool.zoneSyncPending = null;
-    pool.syncScrollAnchorY = -1;
-    pending = null;
+    const palettePinDowngrade = zone === 'hero' && pending.zone === 'palette';
+    if (palettePinDowngrade && (pending.index > 0 || pool.morphFlying || anyDotInFlight(pool))) {
+      zone = pending.zone;
+    } else {
+      pool.zoneSyncPending = null;
+      pool.syncScrollAnchorY = -1;
+      pending = null;
+    }
   }
 
   if (!pending) {
@@ -4255,10 +4387,11 @@ export function tickFlyingDots(
   const syncBudget = scrollLite ? SYNC_BUDGET_SCROLL_MS : SYNC_BUDGET_IDLE_MS;
 
   const normalizeZone = (z: MeshZone) => (z === 'palette' && !pins.palette ? 'hero' : z);
-  let zone = normalizeZone(scrollZone);
+  const scrollIntent = normalizeZone(scrollZone);
+  let zone = scrollIntent;
 
   if (scrollLite) {
-    pool.pendingScrollZone = zone;
+    pool.pendingScrollZone = scrollIntent;
     const morphBusy =
       pool.morphFlying
       || pool.zoneSyncPending != null
@@ -4266,15 +4399,26 @@ export function tickFlyingDots(
     if (morphBusy) {
       if (pool.zoneSyncPending) {
         zone = pool.zoneSyncPending.zone;
+      } else if (
+        pool.activeZone != null
+        && pool.pendingScrollZone !== pool.activeZone
+      ) {
+        zone = pool.pendingScrollZone;
       } else if (pool.activeZone != null) {
         zone = pool.activeZone;
       }
     }
   } else if (opts.catchUp) {
-    zone = normalizeZone(scrollZone);
+    if (pool.zoneSyncPending) {
+      zone = pool.zoneSyncPending.zone;
+    } else {
+      const intent = pool.pendingScrollZone ?? scrollZone;
+      zone = intent === 'palette' ? 'palette' : normalizeZone(intent);
+    }
     pool.pendingScrollZone = null;
   } else if (pool.pendingScrollZone != null) {
-    zone = normalizeZone(pool.pendingScrollZone);
+    const intent = pool.pendingScrollZone;
+    zone = intent === 'palette' ? 'palette' : normalizeZone(intent);
     pool.pendingScrollZone = null;
   } else if (pool.zoneSyncPending) {
     zone = pool.zoneSyncPending.zone;
@@ -4451,7 +4595,19 @@ export function tickFlyingDots(
     ? heroFaceLayout(bundle.faceMesh, pins.hero)
     : null;
 
-  if (!scrollZoneIdle) for (const dot of pool.dots.values()) {
+  const morphStepBusy =
+    pool.morphFlying
+    || pool.zoneSyncPending != null
+    || anyDotInFlight(pool);
+  if (morphStepBusy) refreshPaintDotIds(pool);
+
+  const stepDots = !scrollZoneIdle
+    ? morphStepBusy
+      ? dotsForMorphStep(pool)
+      : [...pool.dots.values()]
+    : [];
+
+  for (const dot of stepDots) {
     const heroSettledIdle =
       heroSettledBase
       && (!pointer.active || !dotHeroPointerInfluence(
@@ -4637,9 +4793,9 @@ export function tickFlyingDots(
   const slow = isMeshSlowMode();
   const lite = isMeshLiteMode();
   const reducedMotion = opts.reducedMotion ?? isMeshReducedMotion();
-  const lowDpr = slow || lite || reducedMotion || zone === 'hero' || zone === 'palette';
   const morphActive = pool.morphFlying || anyDotInFlight(pool);
-  const wireFullClear = morphActive || (zone === 'palette' && !scrollLite);
+  const lowDpr = slow || lite || reducedMotion || morphActive || zone === 'hero' || zone === 'palette';
+  const wireFullClear = zone === 'palette' && !scrollLite && !morphActive;
 
   if (pool.paintDotIds.length === 0 || morphActive) {
     refreshPaintDotIds(pool);
@@ -4839,6 +4995,9 @@ export function tickFlyingDots(
   if (scrollLite && paintCanvasLayer && zoneOnScreen) {
     stride = Math.max(stride, zone === 'hero' || zone === 'palette' ? 5 : 4);
   }
+  if (morphActive && !scrollLite && !opts.scrolling) {
+    stride = Math.max(stride, 2);
+  }
   const wireFrame = opts.wireFrame ?? 0;
   const skipWires =
     (opts.skipWirePaint && !scrollLite)
@@ -4866,6 +5025,7 @@ export function tickFlyingDots(
         pointer,
         sprayClearPin,
         wireFullClear,
+        pins,
       );
     } else {
       clearWireCanvasRegion(
@@ -4878,6 +5038,8 @@ export function tickFlyingDots(
         zone,
         sprayClearPin,
         wireFullClear,
+        pool,
+        pins,
       );
     }
     if (sprayClearPin) pool.sprayFootprintPending = false;

@@ -29,3 +29,17 @@ html.mesh-reduced-motion .dotDiamond {
     scroll-behavior: auto;
   }
 }
+
+/* Scroll / morph — wyłącz blur kart poniżej hero (header i #top bez zmian). */
+html.mesh-scrolling #studio-palety,
+html.mesh-scrolling #projekty,
+html.mesh-scrolling #doswiadczenie,
+html.mesh-scrolling #umiejetnosci,
+html.mesh-scrolling #kontakt,
+html.mesh-morphing #studio-palety,
+html.mesh-morphing #projekty,
+html.mesh-morphing #doswiadczenie,
+html.mesh-morphing #umiejetnosci,
+html.mesh-morphing #kontakt {
+  backdrop-filter: none !important;
+}

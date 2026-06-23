@@ -18,6 +18,11 @@ export function setMeshScrolling(active: boolean) {
   document.documentElement.classList.toggle('mesh-scrolling', active);
 }
 
+export function setMeshMorphing(active: boolean) {
+  if (typeof document === 'undefined') return;
+  document.documentElement.classList.toggle('mesh-morphing', active);
+}
+
 export function isMeshScrolling() {
   return meshScrolling;
 }

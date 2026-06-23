@@ -10,7 +10,7 @@ import {
   tickFlyingDots,
   type FacePointer,
 } from '@/components/animation/flyingDotEngine';
-import { setMeshReady, setMeshScrolling, setMorphZoneLock } from '@/hooks/meshZoneStore';
+import { setMeshReady, setMeshMorphing, setMeshScrolling, setMorphZoneLock } from '@/hooks/meshZoneStore';
 import { resolveActiveMeshZone, HERO_MESH_ANCHOR_ID, FLYING_MESH_CANVAS_ID, MESH_LAYER_ID } from '@/hooks/meshScrollEngine';
 import { currentMeshFrameId, subscribeMeshFrame } from '@/hooks/meshAnimationLoop';
 import { isMeshFullFps, isMeshLiteMode, isMeshReducedMotion, isMeshSlowMode } from '@/hooks/meshPerfMode';
@@ -193,11 +193,14 @@ export function FlyingMeshDots() {
       if (!b || !layer) return;
 
       const pool = poolRef.current;
-      if (scrolling && meshFrameId % 3 !== 0 && !isMeshMorphBusy(pool)) {
+      const morphBusy = isMeshMorphBusy(pool);
+      if (scrolling && meshFrameId % 3 !== 0 && !morphBusy) {
         return;
       }
       const catchUp = !scrolling && catchUpRef.current;
-      if (!scrolling) catchUpRef.current = false;
+      if (catchUp && !morphBusy) {
+        catchUpRef.current = false;
+      }
 
       layerHeightFrame += 1;
       if (!scrolling || layerHeightFrame % 8 === 0) {
@@ -212,15 +215,19 @@ export function FlyingMeshDots() {
       }
 
       const unlimitedFps = isMeshFullFps();
-      const wireStride = unlimitedFps || !scrolling
+      const wireStride = unlimitedFps
         ? 1
-        : slow
-          ? 6
-          : lite
-            ? 6
-            : reducedMotion
-              ? 5
-              : 4;
+        : morphBusy && !scrolling
+          ? 2
+          : !scrolling
+            ? 1
+            : slow
+              ? 6
+              : lite
+                ? 6
+                : reducedMotion
+                  ? 5
+                  : 4;
 
       tickFlyingDots(
         pool,
@@ -250,6 +257,8 @@ export function FlyingMeshDots() {
         },
       );
 
+      setMeshMorphing(morphBusy);
+
       if (!paintedOnce) {
         paintedOnce = true;
         setMeshReady(true);
@@ -264,6 +273,7 @@ export function FlyingMeshDots() {
       unsubscribe();
       setMorphZoneLock(null);
       setMeshScrolling(false);
+      setMeshMorphing(false);
     };
   }, [bundle, slow, lite, reducedMotion]);
 
