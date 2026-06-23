@@ -63,7 +63,7 @@ export const projects: Project[] = [
   },
   {
     id: 'forkfull',
-    name: 'Forkfull',
+    name: 'Forkful',
     tagline: 'Świadome odżywianie — AI, local-first, subskrypcje',
     description:
       'Aplikacja mobilna do śledzenia makro z analizą posiłków ze zdjęcia przez Gemini. Architektura privacy-first: SQLite lokalnie, opcjonalny sync w chmurze. Meal Copilot, Health Connect i plany Premium przez RevenueCat.',

@@ -4,7 +4,7 @@ export const en: Translations = {
   meta: {
     title: 'Mikołaj Mikołajczuk — Portfolio',
     description:
-      'Mikołaj Mikołajczuk — Software Engineer. TransitRank, Forkfull, Kamochi.',
+      'Mikołaj Mikołajczuk — Software Engineer. TransitRank, Forkful, Kamochi.',
   },
   nav: {
     aria: 'Main navigation',
@@ -32,7 +32,7 @@ export const en: Translations = {
       { label: 'Data / ETL', value: 90 },
     ],
     ctaProjects: 'View projects',
-    ctaConfirm: 'Confirm',
+    ctaConfirm: 'Contact',
     meshLoading: 'Loading animation…',
   },
   about: {
@@ -91,7 +91,7 @@ export const en: Translations = {
         ],
       },
       forkfull: {
-        name: 'Forkfull',
+        name: 'Forkful',
         tagline: 'Mindful nutrition — AI, local-first, subscriptions',
         description:
           'A mobile macro-tracking app with meal analysis from photos via Gemini. Privacy-first architecture: SQLite locally, optional cloud sync. Meal Copilot, Health Connect, and Premium plans through RevenueCat.',
@@ -290,7 +290,6 @@ export const en: Translations = {
   },
   footer: {
     contactLinks: 'Contact links',
-    contact: 'Contact',
   },
   profile: {
     location: 'Sokołów Podlaski, Poland',

@@ -25,9 +25,6 @@ export function SiteFooter() {
           <GitHubIcon size={14} />
           GitHub
         </a>
-        <a href="#kontakt" className={styles.link}>
-          {t.footer.contact}
-        </a>
       </nav>
     </footer>
   );

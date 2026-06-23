@@ -118,7 +118,6 @@ export interface Translations {
   };
   footer: {
     contactLinks: string;
-    contact: string;
   };
   profile: {
     location: string;
