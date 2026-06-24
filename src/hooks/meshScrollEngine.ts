@@ -180,6 +180,13 @@ export function resolveActiveMeshZone(vh = window.innerHeight): MeshZone {
   return resolveActiveZoneWithHysteresis(vh);
 }
 
+/** Strefa z pozycji scrolla — bez histerezy; natychmiastowe hero/paleta przy zatrzymaniu. */
+export function resolveScrollTargetZone(vh = window.innerHeight): MeshZone {
+  const locked = readMorphZoneLock();
+  if (locked) return locked;
+  return resolveSegmentZone(readViewportProbeY(vh), vh);
+}
+
 /** Utrzymuje histerezę zgodną z aktywnym morph — bez oscylacji przy odwróceniu scrolla. */
 export function pinCommittedMeshZone(zone: MeshZone) {
   committedZone = zone;

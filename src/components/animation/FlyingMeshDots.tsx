@@ -5,13 +5,20 @@ import type { MeshBundle } from '@/components/animation/mesh/morph/types';
 import {
   createFlyingPool,
   isMeshMorphBusy,
+  isMorphSettled,
   prewarmMeshLayouts,
   stashScrollZoneIntent,
   tickFlyingDots,
   type FacePointer,
 } from '@/components/animation/flyingDotEngine';
 import { setMeshReady, setMeshMorphing, setMeshScrolling, setMorphZoneLock } from '@/hooks/meshZoneStore';
-import { resolveActiveMeshZone, HERO_MESH_ANCHOR_ID, FLYING_MESH_CANVAS_ID, MESH_LAYER_ID } from '@/hooks/meshScrollEngine';
+import {
+  invalidateZonePinsCache,
+  resolveScrollTargetZone,
+  HERO_MESH_ANCHOR_ID,
+  FLYING_MESH_CANVAS_ID,
+  MESH_LAYER_ID,
+} from '@/hooks/meshScrollEngine';
 import { currentMeshFrameId, subscribeMeshFrame } from '@/hooks/meshAnimationLoop';
 import { isMeshFullFps, isMeshLiteMode, isMeshReducedMotion, isMeshSlowMode } from '@/hooks/meshPerfMode';
 import { attachScrollIntentTracking, markScrollActivity } from '@/hooks/meshPerfStats';
@@ -19,7 +26,7 @@ import { attachScrollRevealTracking } from '@/hooks/scrollRevealBatch';
 import { readMeshZone } from '@/hooks/meshZoneStore';
 import styles from './FlyingMeshDots.module.css';
 
-const SCROLL_IDLE_MS = 150;
+const SCROLL_IDLE_MS = 80;
 let prewarmScheduled = false;
 
 export function FlyingMeshDots() {
@@ -164,15 +171,17 @@ export function FlyingMeshDots() {
 
     function onUserScrollIntent() {
       markScrollActivity();
+      catchUpRef.current = false;
       scrollPausedRef.current = true;
       setMeshScrolling(true);
       setMorphZoneLock(null);
-      stashScrollZoneIntent(poolRef.current, resolveActiveMeshZone());
+      stashScrollZoneIntent(poolRef.current, resolveScrollTargetZone());
       window.clearTimeout(scrollIdleTimer);
       scrollIdleTimer = window.setTimeout(() => {
         scrollPausedRef.current = false;
         setMeshScrolling(false);
         catchUpRef.current = true;
+        invalidateZonePinsCache();
       }, SCROLL_IDLE_MS);
     }
 
@@ -194,11 +203,29 @@ export function FlyingMeshDots() {
 
       const pool = poolRef.current;
       const morphBusy = isMeshMorphBusy(pool);
-      if (scrolling && meshFrameId % 3 !== 0 && !morphBusy) {
+      const activeZone = pool.activeZone ?? readMeshZone().zone;
+      const scrollTarget = pool.pendingScrollZone ?? resolveScrollTargetZone();
+      const paletteMorph =
+        pool.morphCommitZone != null
+        || pool.zoneSyncPending?.zone === 'palette'
+        || activeZone === 'palette'
+        || scrollTarget === 'palette';
+      const onScreenMorphZone =
+        activeZone === 'hero'
+        || activeZone === 'palette'
+        || morphBusy
+        || pool.zoneSyncPending != null
+        || paletteMorph;
+      if (scrolling && meshFrameId % 2 !== 0 && !onScreenMorphZone) {
         return;
       }
       const catchUp = !scrolling && catchUpRef.current;
-      if (catchUp && !morphBusy) {
+      if (
+        catchUp
+        && isMorphSettled(pool)
+        && !pool.zoneSyncPending
+        && (pool.morphCommitZone == null || pool.activeZone === pool.morphCommitZone)
+      ) {
         catchUpRef.current = false;
       }
 

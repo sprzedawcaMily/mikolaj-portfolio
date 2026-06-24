@@ -7,7 +7,7 @@ import {
   pinForZonePins,
   refreshMeshZoneAfterViewportChange,
   pinCommittedMeshZone,
-  resolveActiveMeshZone,
+  resolveScrollTargetZone,
   type MeshPinState,
 } from '@/hooks/meshScrollEngine';
 import type { PaletteTone } from '@/components/animation/mesh/parsePaletteMesh';
@@ -46,7 +46,7 @@ import {
   stepEyeIrisReveal,
 } from '@/components/animation/eyeBlink';
 import { publishMeshMotionState } from '@/hooks/meshMotionState';
-import { publishMeshZone, readMeshZone } from '@/hooks/meshZoneStore';
+import { publishMeshZone, readMeshZone, setMorphZoneLock } from '@/hooks/meshZoneStore';
 import { isMeshLiteMode, isMeshReducedMotion, isMeshSlowMode } from '@/hooks/meshPerfMode';
 import {
   isPerfMonitorEnabled,
@@ -178,6 +178,8 @@ export type FlyingPool = {
   syncScrollAnchorY: number;
   /** Docelowa strefa ze scrolla — stosowana dopiero po zatrzymaniu przewijania. */
   pendingScrollZone: MeshZone | null;
+  /** Zablokowany cel hero↔paleta — bez flipu na granicy po zatrzymaniu scrolla. */
+  morphCommitZone: MeshZone | null;
   /** Aktywne kropki do malowania — bez pełnego skanu pool.dots. */
   paintDotIds: string[];
   /** Kropki twarzy / włosów — tylko dla applyHeroFaceMotion. */
@@ -190,6 +192,10 @@ export type FlyingPool = {
   heroLiveBlend: number;
   /** Spany odłączone na czas scrollLite — bez pętli detach × N klatek. */
   scrollCanvasDetached: boolean;
+  /** Pełny clear canvasu po zakończeniu morphu (ślady poza strefą pinów). */
+  postMorphFullClear: boolean;
+  /** Poprzednia klatka: morph lub lot kropek aktywny. */
+  morphWasActive: boolean;
 };
 
 type ZoneSyncPending = {
@@ -214,6 +220,7 @@ type ZoneSyncPending = {
 
 const SYNC_BUDGET_SCROLL_MS = 6;
 const SYNC_BUDGET_IDLE_MS = 48;
+const SYNC_BUDGET_CATCHUP_MS = 140;
 
 const STATIC_CARD_ZONES = new Set<MeshZone>(['bus', 'fork', 'spray', 'loupe', 'ring']);
 /** Margines clipu canvasu podczas morphu — obejmuje lot między pinami bez full-page clear. */
@@ -894,7 +901,7 @@ function findDuplicateSpawn(
 ): ViewportGoal | null {
   const pick = (id: string) => {
     const dot = pool.dots.get(id);
-    if (!dot || dot.alpha < 0.04) return null;
+    if (!dot || (dot.alpha < 0.04 && dot.tgtAlpha < 0.04)) return null;
     return { x: dot.x, y: dot.y };
   };
 
@@ -951,7 +958,12 @@ function activeZoneLayoutKey(
   if (zone === 'contactArrow') {
     return `${Math.round(pin.docLeft / 8) * 8}:${Math.round(pin.docTop / 8) * 8}:${Math.round(pin.stageW)}:${Math.round(pin.stageH)}`;
   }
-  return `${Math.round(pin.docLeft)}:${Math.round(pin.docTop)}:${Math.round(pin.stageW)}:${Math.round(pin.stageH)}:${Math.round(pin.rotateDeg)}`;
+  const pinKey = `${Math.round(pin.docLeft)}:${Math.round(pin.docTop)}:${Math.round(pin.stageW)}:${Math.round(pin.stageH)}:${Math.round(pin.rotateDeg)}`;
+  if (zone === 'palette' && pins.paletteAim) {
+    const aim = pins.paletteAim;
+    return `${pinKey}:${Math.round(aim.x)}:${Math.round(aim.y)}`;
+  }
+  return pinKey;
 }
 
 /** Resize / zoom / picker — snap do pinu; w locie tylko cel (chyba że zmienił się rozmiar stage). */
@@ -986,14 +998,35 @@ function syncRigidLayoutFollow(
       dot.paletteTone = layout.paletteTones.get(dot.hostId) ?? 'wire';
     }
 
+    const prevTgtX = dot.tgtX;
+    const prevTgtY = dot.tgtY;
     dot.tgtX = goal.x;
     dot.tgtY = goal.y;
 
     const inFlight = dotInFlight(dot) || dot.departLeft > 0.01 || dot.flightU < 0.999;
     if (inFlight && !sizeChanged) {
-      const rem = Math.hypot(dot.tgtX - dot.x, dot.tgtY - dot.y);
-      if (rem > dot.flightDist) dot.flightDist = rem;
+      const tgtShift = Math.hypot(prevTgtX - goal.x, prevTgtY - goal.y);
+      if (tgtShift > SOFT_TGT_SHIFT_PX && (zone === 'palette' || zone === 'hero')) {
+        dot.srcX = dot.x;
+        dot.srcY = dot.y;
+        dot.flightU = 0;
+        dot.gatherPath = zone === 'palette';
+        dot.simpleFlight = zone === 'hero';
+        dot.flightDist = dot.gatherPath
+          ? gatherFlightLength(dot)
+          : Math.hypot(dot.tgtX - dot.x, dot.tgtY - dot.y);
+        dot.departLeft = 0;
+        dot.alphaHoldLeft = 0;
+      } else {
+        const rem = Math.hypot(dot.tgtX - dot.x, dot.tgtY - dot.y);
+        if (rem > dot.flightDist) dot.flightDist = rem;
+      }
       continue;
+    }
+
+    if (pool.morphFlying || pool.zoneSyncPending) {
+      const rem = Math.hypot(dot.x - goal.x, dot.y - goal.y);
+      if (rem > SOFT_TGT_SHIFT_PX) continue;
     }
 
     dot.x = goal.x;
@@ -1358,7 +1391,30 @@ export function resolveMeshZoneLock(pool: FlyingPool): MeshZone | null {
 }
 
 export function stashScrollZoneIntent(pool: FlyingPool, zone: MeshZone) {
+  pool.morphCommitZone = null;
   pool.pendingScrollZone = zone;
+}
+
+/** Scroll zmienił kierunek — odrzuć sync w przeciwną stronę. */
+function cancelStaleZoneSync(pool: FlyingPool, intent: MeshZone): boolean {
+  if (!pool.zoneSyncPending || pool.zoneSyncPending.zone === intent) return false;
+  if (
+    pool.morphCommitZone != null
+    && pool.zoneSyncPending.zone === pool.morphCommitZone
+  ) {
+    return false;
+  }
+  pool.zoneSyncPending = null;
+  pool.syncScrollAnchorY = -1;
+  if (pool.activeZone === intent) {
+    pool.activeLayoutKey = '';
+  }
+  return true;
+}
+
+/** Twarz hero i paleta to ten sam zestaw kropek — bez crumble przy morphu. */
+function isHeroPaletteTransition(from: MeshZone | null | undefined, to: MeshZone) {
+  return (from === 'hero' && to === 'palette') || (from === 'palette' && to === 'hero');
 }
 
 
@@ -1721,6 +1777,8 @@ function stepFlight(dot: FlyingDot, dt: number, now: number) {
   }
 
   if (dot.flightU >= 1) {
+    const rem = Math.hypot(dot.x - dot.tgtX, dot.y - dot.tgtY);
+    if (rem > 2 && dot.tgtAlpha > 0.04) return;
     dot.x = dot.tgtX;
     dot.y = dot.tgtY;
     dot.flightDist = 0;
@@ -1736,6 +1794,12 @@ function stepFlight(dot: FlyingDot, dt: number, now: number) {
   dot.flightU = Math.min(1, dot.flightU + dt / Math.max(dot.flightDur, 0.5));
 
   if (dot.flightU >= 1) {
+    const rem = Math.hypot(dot.x - dot.tgtX, dot.y - dot.tgtY);
+    if (rem > 2 && dot.tgtAlpha > 0.04) {
+      dot.flightU = 0.999;
+      applyFlightPosition(dot);
+      return;
+    }
     dot.x = dot.tgtX;
     dot.y = dot.tgtY;
     dot.flightU = 1;
@@ -1790,12 +1854,15 @@ export function createFlyingPool(): FlyingPool {
     zoneSyncPending: null,
     syncScrollAnchorY: -1,
     pendingScrollZone: null,
+    morphCommitZone: null,
     paintDotIds: [],
     faceMotionDotIds: [],
     faceInfluencedIds: [],
     heroWirePairs: [],
     heroLiveBlend: 0,
     scrollCanvasDetached: false,
+    postMorphFullClear: false,
+    morphWasActive: false,
   };
 }
 
@@ -1956,6 +2023,57 @@ function morphPaintUnionRect(
   };
 }
 
+function morphDotClearDocPoints(dot: FlyingDot) {
+  const pts = [
+    { x: dot.x + dot.displayOx, y: dot.y + dot.displayOy },
+    { x: dot.tgtX, y: dot.tgtY },
+  ];
+  if (dotInFlight(dot) || dot.flightDist > 0.5) {
+    pts.push(
+      { x: dot.srcX, y: dot.srcY },
+      { x: dot.hubX, y: dot.hubY },
+      { x: dot.gatherCx, y: dot.gatherCy },
+    );
+  }
+  return pts;
+}
+
+function mergeMorphUnionWithFlyingDots(
+  union: { x: number; y: number; w: number; h: number } | null,
+  pool: FlyingPool,
+  layerOrigin: { x: number; y: number },
+  layerW: number,
+  layerH: number,
+) {
+  const dotMargin = Math.max(28, 12 * pool.layoutScale);
+  let minX = union?.x ?? Infinity;
+  let minY = union?.y ?? Infinity;
+  let maxX = union != null ? union.x + union.w : -Infinity;
+  let maxY = union != null ? union.y + union.h : -Infinity;
+  let expanded = false;
+
+  for (const dot of pool.dots.values()) {
+    if (dotDisplayAlpha(dot) < 0.03 && !dotInFlight(dot)) continue;
+    for (const p of morphDotClearDocPoints(dot)) {
+      const cx = p.x - layerOrigin.x;
+      const cy = p.y - layerOrigin.y;
+      minX = Math.min(minX, cx - dotMargin);
+      minY = Math.min(minY, cy - dotMargin);
+      maxX = Math.max(maxX, cx + dotMargin);
+      maxY = Math.max(maxY, cy + dotMargin);
+      expanded = true;
+    }
+  }
+
+  if (!expanded && union == null) return null;
+  return {
+    x: Math.max(0, minX),
+    y: Math.max(0, minY),
+    w: Math.max(0, Math.min(layerW, maxX) - Math.max(0, minX)),
+    h: Math.max(0, Math.min(layerH, maxY) - Math.max(0, minY)),
+  };
+}
+
 function clearMorphPaintClips(
   ctx: CanvasRenderingContext2D,
   pool: FlyingPool,
@@ -1968,7 +2086,13 @@ function clearMorphPaintClips(
   extraClearPin: MeshPinState | null,
 ) {
   const clips = morphPaintClips(pin, zone, pool, pins, extraClearPin);
-  const union = morphPaintUnionRect(clips, layerOrigin, layerW, layerH);
+  const union = mergeMorphUnionWithFlyingDots(
+    morphPaintUnionRect(clips, layerOrigin, layerW, layerH),
+    pool,
+    layerOrigin,
+    layerW,
+    layerH,
+  );
   if (union && union.w > 0 && union.h > 0) {
     ctx.clearRect(union.x, union.y, union.w, union.h);
     return;
@@ -1989,6 +2113,11 @@ function clearWireBeforePaint(
   layerOrigin: { x: number; y: number },
   extraClearPin: MeshPinState | null,
 ) {
+  if (pool.postMorphFullClear) {
+    ctx.clearRect(0, 0, w, h);
+    pool.postMorphFullClear = false;
+    return;
+  }
   if (morphActive && pins) {
     clearMorphPaintClips(ctx, pool, pin, zone, pins, layerOrigin, w, h, extraClearPin);
     return;
@@ -3892,7 +4021,12 @@ function syncFlyingTargets(
   let pending = pool.zoneSyncPending;
   if (pending && pending.zone !== zone) {
     const palettePinDowngrade = zone === 'hero' && pending.zone === 'palette';
-    if (palettePinDowngrade && (pending.index > 0 || pool.morphFlying || anyDotInFlight(pool))) {
+    const scrollWantsHero = pool.pendingScrollZone === 'hero';
+    if (
+      palettePinDowngrade
+      && !scrollWantsHero
+      && (pending.index > 0 || pool.morphFlying || anyDotInFlight(pool))
+    ) {
       zone = pending.zone;
     } else {
       pool.zoneSyncPending = null;
@@ -3935,7 +4069,16 @@ function syncFlyingTargets(
 
     pool.tgtLayoutScale = layout.layoutScale;
     const r = Math.max(1.4, 4.5 * pool.layoutScale);
-    const leavingHero = zoneChanged && pool.activeZone === 'hero' && zone !== 'hero';
+    const leavingHero =
+      zoneChanged
+      && pool.activeZone === 'hero'
+      && zone !== 'hero'
+      && !isHeroPaletteTransition(pool.activeZone, zone);
+
+    if (zoneChanged && isHeroPaletteTransition(pool.activeZone, zone)) {
+      pool.morphCommitZone = zone;
+      pool.morphFlying = true;
+    }
 
     pending = {
       zone,
@@ -3952,7 +4095,10 @@ function syncFlyingTargets(
       visibleBefore,
       hostOrder: sortedHostIds(layout.goals),
       leavingHero,
-      buildingShape: zoneChanged && !leavingHero,
+      buildingShape:
+        zoneChanged
+        && !leavingHero
+        && !isHeroPaletteTransition(pool.activeZone, zone),
       dotFragment: document.createDocumentFragment(),
       batchNewDots: false,
       size: r * 2,
@@ -4016,7 +4162,7 @@ function syncFlyingTargets(
       dot.hairMix = 0;
     }
 
-    if (p.zoneChanged && p.buildingShape && !wasInPrevZone) {
+    if (p.zoneChanged && !wasInPrevZone) {
       if (dot.isReflector && reflectorMorphSnapZone(zone)) {
         snapReflectorForMorph(dot, goal);
       } else {
@@ -4033,7 +4179,9 @@ function syncFlyingTargets(
           dot.srcX = dup.x;
           dot.srcY = dup.y;
         }
-        dot.alpha = 0;
+        if (p.buildingShape) {
+          dot.alpha = 0;
+        }
       }
     }
 
@@ -4363,7 +4511,10 @@ export function tickFlyingDots(
   const pinsT0 = performance.now();
   const scrolling = opts.scrolling ?? false;
   const scrollLite = opts.scrollLite ?? false;
-  const pins = computeAllZonePins(opts.meshFrameId ?? -1, scrollLite);
+  const scrollZoneGuess = resolveScrollTargetZone();
+  const pinScrollHold =
+    scrollLite && scrollZoneGuess !== 'palette' && scrollZoneGuess !== 'hero';
+  const pins = computeAllZonePins(opts.meshFrameId ?? -1, pinScrollHold);
   const pinsMs = performance.now() - pinsT0;
   if (!pins) return;
 
@@ -4383,50 +4534,117 @@ export function tickFlyingDots(
   pool.viewportKey = viewportKey;
 
   const scrollDir = stepScrollBuildDir();
-  const scrollZone = resolveActiveMeshZone();
-  const syncBudget = scrollLite ? SYNC_BUDGET_SCROLL_MS : SYNC_BUDGET_IDLE_MS;
+  const scrollZone = resolveScrollTargetZone();
+  const morphBusy =
+    pool.morphFlying
+    || pool.zoneSyncPending != null
+    || anyDotInFlight(pool);
+  const scrollIntentEarly = pool.pendingScrollZone ?? scrollZoneGuess;
 
   const normalizeZone = (z: MeshZone) => (z === 'palette' && !pins.palette ? 'hero' : z);
   const scrollIntent = normalizeZone(scrollZone);
   let zone = scrollIntent;
 
-  if (scrollLite) {
-    pool.pendingScrollZone = scrollIntent;
-    const morphBusy =
-      pool.morphFlying
-      || pool.zoneSyncPending != null
-      || anyDotInFlight(pool);
-    if (morphBusy) {
-      if (pool.zoneSyncPending) {
-        zone = pool.zoneSyncPending.zone;
-      } else if (
-        pool.activeZone != null
-        && pool.pendingScrollZone !== pool.activeZone
-      ) {
-        zone = pool.pendingScrollZone;
-      } else if (pool.activeZone != null) {
-        zone = pool.activeZone;
-      }
+  if (opts.catchUp && pool.morphCommitZone == null) {
+    const latch = pool.pendingScrollZone ?? scrollZone;
+    const latched = latch === 'palette' ? 'palette' : normalizeZone(latch);
+    if (latched === 'hero' || latched === 'palette') {
+      pool.morphCommitZone = latched;
     }
+  }
+
+  if (scrollLite) {
+    const liveIntent = scrollIntent;
+    if (
+      !morphBusy
+      || pool.morphCommitZone == null
+      || !isHeroPaletteTransition(pool.morphCommitZone, liveIntent)
+    ) {
+      pool.pendingScrollZone = liveIntent;
+    }
+    const stashIntent = pool.pendingScrollZone ?? liveIntent;
+    cancelStaleZoneSync(pool, stashIntent);
+    zone = pool.zoneSyncPending?.zone ?? stashIntent;
   } else if (opts.catchUp) {
+    const catchIntent = pool.pendingScrollZone ?? scrollZone;
+    cancelStaleZoneSync(pool, normalizeZone(catchIntent === 'palette' ? 'palette' : catchIntent));
     if (pool.zoneSyncPending) {
       zone = pool.zoneSyncPending.zone;
     } else {
       const intent = pool.pendingScrollZone ?? scrollZone;
       zone = intent === 'palette' ? 'palette' : normalizeZone(intent);
     }
-    pool.pendingScrollZone = null;
+    if (morphSettled(pool) && !pool.zoneSyncPending && pool.activeZone === zone) {
+      pool.pendingScrollZone = null;
+    }
   } else if (pool.pendingScrollZone != null) {
     const intent = pool.pendingScrollZone;
+    cancelStaleZoneSync(pool, intent === 'palette' ? 'palette' : normalizeZone(intent));
     zone = intent === 'palette' ? 'palette' : normalizeZone(intent);
     pool.pendingScrollZone = null;
   } else if (pool.zoneSyncPending) {
     zone = pool.zoneSyncPending.zone;
   }
 
+  if (pool.morphCommitZone != null && (morphBusy || opts.catchUp)) {
+    zone = pool.zoneSyncPending?.zone ?? pool.morphCommitZone;
+  }
+
+  if (opts.catchUp && morphBusy) {
+    const catchIntent = pool.pendingScrollZone ?? scrollZone;
+    cancelStaleZoneSync(pool, normalizeZone(catchIntent === 'palette' ? 'palette' : catchIntent));
+    if (pool.zoneSyncPending) {
+      zone = pool.zoneSyncPending.zone;
+    } else if (pool.pendingScrollZone != null) {
+      zone = normalizeZone(pool.pendingScrollZone);
+    } else if (pool.activeZone != null) {
+      zone = pool.activeZone;
+    }
+  } else if (
+    !scrollLite
+    && !opts.catchUp
+    && morphBusy
+    && pool.pendingScrollZone == null
+    && pool.activeZone != null
+  ) {
+    if (pool.zoneSyncPending) {
+      zone = pool.zoneSyncPending.zone;
+    } else {
+      zone = pool.activeZone;
+    }
+  }
+
+  if (
+    pool.morphCommitZone != null
+    && morphSettled(pool)
+    && !pool.zoneSyncPending
+    && pool.activeZone === pool.morphCommitZone
+  ) {
+    pool.morphCommitZone = null;
+  }
+
+  if (morphSettled(pool) && !pool.zoneSyncPending) {
+    setMorphZoneLock(null);
+  }
+
   const pinKey = pinLayoutKey(pins);
   const layoutKey = activeZoneLayoutKey(zone, pins);
   const zoneChanged = pool.activeZone !== zone;
+  const heroPaletteMorph =
+    pool.morphCommitZone != null
+    || isHeroPaletteTransition(pool.activeZone, zone)
+    || (pool.zoneSyncPending != null
+      && isHeroPaletteTransition(pool.activeZone, pool.zoneSyncPending.zone));
+  const syncBudget = heroPaletteMorph
+    ? Number.POSITIVE_INFINITY
+    : opts.catchUp
+      ? SYNC_BUDGET_CATCHUP_MS * 8
+      : scrollLite
+        && !morphBusy
+        && scrollIntentEarly !== 'hero'
+        && scrollIntentEarly !== 'palette'
+        ? SYNC_BUDGET_SCROLL_MS
+        : SYNC_BUDGET_IDLE_MS;
   const layoutChanged = pool.pinKey !== pinKey;
   const anchorChanged = layoutKey !== pool.activeLayoutKey;
   const layerOrigin = layerDocOffset(layer);
@@ -4486,9 +4704,9 @@ export function tickFlyingDots(
       pinCommittedMeshZone(zone);
     }
   } else if (anchorChanged) {
-    const freezeHeroScroll = scrollLite && zone === 'hero';
+    const freezeHeroScroll = scrollLite && zone === 'hero' && morphSettled(pool);
     const eyeBuilding = isEyeZone(zone) && (pool.morphFlying || anyDotInFlight(pool));
-    const scrollFollowStride = scrollLite ? 2 : 1;
+    const scrollFollowStride = scrollLite && zone !== 'palette' ? 2 : 1;
     const shouldRigidFollow =
       !freezeHeroScroll
       && !eyeBuilding
@@ -4580,7 +4798,8 @@ export function tickFlyingDots(
     scrollLite
     && morphSettled(pool)
     && !pool.morphFlying
-    && !anyDotInFlight(pool);
+    && !anyDotInFlight(pool)
+    && !zoneOnScreen;
 
   const faceMotionReady = !scrollLite && allowFaceMotion(pool, zone);
 
@@ -4655,6 +4874,11 @@ export function tickFlyingDots(
   stepMs = performance.now() - stepT0;
 
   updateMorphBloom(pool, now);
+  const morphActiveAfterStep = pool.morphFlying || anyDotInFlight(pool);
+  if (pool.morphWasActive && !morphActiveAfterStep) {
+    pool.postMorphFullClear = true;
+  }
+  pool.morphWasActive = morphActiveAfterStep;
   if (morphSettled(pool)) {
     pool.retiringWireEdges = [];
     pool.retiringWireZone = null;
@@ -4767,6 +4991,23 @@ export function tickFlyingDots(
     eyeHullPathD: isEyeZone(zone) ? pool.eyeHullPathD : '',
   });
 
+  if (
+    zone === 'palette'
+    && pool.activeZone === 'palette'
+    && !pool.zoneSyncPending
+    && !pool.morphFlying
+    && !anyDotInFlight(pool)
+  ) {
+    let revived = false;
+    for (const dot of pool.dots.values()) {
+      if (!dot.id.startsWith('h:') || dot.tgtAlpha <= 0.04) continue;
+      if (dot.alpha > 0.04) continue;
+      dot.alpha = DOT_ALPHA;
+      revived = true;
+    }
+    if (revived) refreshPaintDotIds(pool);
+  }
+
   const palettePaintVisible = zone !== 'palette' || isStudioPaletyInView();
   const paletteColors = zone === 'palette' ? getPaletteToneColors(accent) : null;
   const paletteCanvasDots = zone === 'palette' && palettePaintVisible;
@@ -4816,6 +5057,7 @@ export function tickFlyingDots(
     || shapeCanvasDots
     || paletteCanvasDots
     || zone === 'hero'
+    || morphActive
     || pointer.active;
 
   let skipDomPaint = opts.skipPaint ?? false;
@@ -4823,7 +5065,7 @@ export function tickFlyingDots(
   const canvasIdleEligible =
     paintCanvasLayer
     && settledNow
-    && !pool.morphFlying
+    && !morphActive
     && !pool.zoneSyncPending
     && !pointer.active
     && !scrolling
@@ -4853,16 +5095,7 @@ export function tickFlyingDots(
     pool.scrollCanvasDetached = false;
   }
 
-  if (
-    !scrollLite
-    && zone === 'palette'
-    && morphActive
-    && !pointer.active
-  ) {
-    pool.idlePaintPhase = (pool.idlePaintPhase + 1) % 2;
-    skipDomPaint = true;
-    skipCanvasPaint = pool.idlePaintPhase !== 0;
-  } else if (canvasIdleEligible) {
+  if (canvasIdleEligible) {
     if (STATIC_CARD_ZONES.has(zone)) {
       pool.idleTickPhase = (pool.idleTickPhase + 1) % 3;
       skipDomPaint = true;
@@ -4989,11 +5222,14 @@ export function tickFlyingDots(
   if (zone === 'ring' && settledNow && !pointer.active) {
     stride = 1;
   }
-  if (scrollLite && paintCanvasLayer && zone !== 'hero') {
+  if (morphActive) {
     stride = 1;
-  }
-  if (scrollLite && paintCanvasLayer && zoneOnScreen) {
-    stride = Math.max(stride, zone === 'hero' || zone === 'palette' ? 5 : 4);
+  } else if (scrollLite && paintCanvasLayer && zoneOnScreen && (zone === 'palette' || zone === 'hero')) {
+    stride = 1;
+  } else if (scrollLite && paintCanvasLayer && zone !== 'hero') {
+    stride = 1;
+  } else if (scrollLite && paintCanvasLayer && zoneOnScreen) {
+    stride = Math.max(stride, 4);
   }
   if (morphActive && !scrollLite && !opts.scrolling) {
     stride = Math.max(stride, 2);
